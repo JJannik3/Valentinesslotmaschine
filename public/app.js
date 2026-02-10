@@ -56,7 +56,7 @@ const MILESTONES = [
 
 // === symbols ===
 // Freespins trigger: NIGHT (🌑) count >= 4 anywhere in grid
-// LIGHT: rarer overall (also at start), but powerful: +3x bet & +1 lamp each time it appears
+// LIGHT: rarer overall and also rarer in FS (per your request)
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
@@ -66,8 +66,8 @@ const SYM = {
 
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
-  // LIGHT: now clearly rarer
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.22, wFS: 0.42 },
+  // ✅ reduced: rarer in base + rarer in FS
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.18, wFS: 0.34 },
 
   // Wilds: base wild exists, multipliers are FS-only rare
   WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 1.6,  mult: 1 },
@@ -96,7 +96,7 @@ function defaultState() {
     lights: 0,
     unlocked: [],
     freeSpinsLeft: 0,
-    // now stores {x,y,k} so multipliers stay sticky too
+    // stores {x,y,k} and persists across ALL remaining FS spins
     stickyWilds: [],
     lastGrid: null,
   };
@@ -139,6 +139,18 @@ function symbolWeights(isFS){
   return w;
 }
 
+// apply sticky wilds into a grid (FS only)
+function applyStickyWildsToGrid(grid){
+  if (state.freeSpinsLeft <= 0) return;
+  if (!state.stickyWilds.length) return;
+
+  for (const p of state.stickyWilds){
+    if (grid[p.y]?.[p.x]){
+      grid[p.y][p.x] = SYM[p.k] || SYM.WILD;
+    }
+  }
+}
+
 function genGrid() {
   const isFS = state.freeSpinsLeft > 0;
   const weights = symbolWeights(isFS);
@@ -151,14 +163,8 @@ function genGrid() {
     }
   }
 
-  // sticky wilds in FS (keep exact wild type k)
-  if (isFS && state.stickyWilds.length){
-    for (const p of state.stickyWilds){
-      if (grid[p.y]?.[p.x]){
-        grid[p.y][p.x] = SYM[p.k] || SYM.WILD;
-      }
-    }
-  }
+  // sticky wilds persist across ALL FS spins
+  if (isFS) applyStickyWildsToGrid(grid);
 
   return grid;
 }
@@ -167,12 +173,10 @@ function genGrid() {
 const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR, SYM.NIGHT];
 const PAYABLE_KEYS = new Set(PAYABLE.map(s => s.k));
 
-// 5 benachbarte
 const CLUSTER_MIN = 5;
 
 function symbolByKey(k){ return PAYABLE.find(s=>s.k===k); }
 
-// tiers based on your payout3/4/5
 function payoutMultForSize(sym, size){
   // 5-6 => payout3, 7-8 => payout4, 9+ => payout5
   if (size >= 9) return sym.payout5;
@@ -272,21 +276,15 @@ function applyCascade(grid, winPosSet){
     }
   }
 
-  // re-apply sticky wilds in FS
-  if (isFS && state.stickyWilds.length){
-    for (const p of state.stickyWilds){
-      if (g[p.y]?.[p.x]){
-        g[p.y][p.x] = SYM[p.k] || SYM.WILD;
-      }
-    }
-  }
+  // re-apply sticky wilds across ALL FS spins
+  if (isFS) applyStickyWildsToGrid(g);
 
   return g;
 }
 
 // === LIGHT mechanics ===
 // each LIGHT appearing awards: +3*bet coins and +1 lamp (up to 10)
-// we count per "grid state" (initial + each cascade result), so if a light drops in later, it counts.
+// NOTE: This counts every grid state; if you want "only newly dropped lights", tell me.
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
@@ -315,7 +313,6 @@ function nightCount(grid){
 }
 
 function renderScatter(count){
-  // show up to 4 dots filled based on NIGHT count (cap at 4)
   const fill = Math.min(4, count);
   elScatterMeter.innerHTML = "";
   for (let i=0;i<4;i++){
@@ -326,20 +323,21 @@ function renderScatter(count){
   }
 }
 
-function evalStickyWilds(grid){
-  const newSticky = [];
-  if (state.freeSpinsLeft > 0){
-    for (let y=0;y<GRID_H;y++){
-      for (let x=0;x<GRID_W;x++){
-        const s = grid[y][x];
-        if (isAnyWild(s)){
-          const exists = state.stickyWilds.some(p=>p.x===x && p.y===y);
-          if (!exists) newSticky.push({x,y,k:s.k});
-        }
+// ✅ VERY IMPORTANT: add sticky wilds when they appear in FS, and KEEP them for all remaining FS
+function addStickyWildsFromGrid(grid){
+  if (state.freeSpinsLeft <= 0) return;
+
+  for (let y=0;y<GRID_H;y++){
+    for (let x=0;x<GRID_W;x++){
+      const s = grid[y][x];
+      if (!isAnyWild(s)) continue;
+
+      const exists = state.stickyWilds.some(p => p.x===x && p.y===y);
+      if (!exists){
+        state.stickyWilds.push({x,y,k:s.k});
       }
     }
   }
-  return newSticky;
 }
 
 function unlockMilestonesIfNeeded(){
@@ -362,13 +360,9 @@ function renderGrid(grid){
 
       cell.textContent = sym.emoji;
 
-      // wild label + multiplier
-      if (isAnyWild(sym)){
-        cell.classList.add("wild");
-        const m = wildMult(sym);
-        if (m > 1) cell.dataset.mult = `${m}x`;
-        else delete cell.dataset.mult;
-      }
+      cell.classList.toggle("wild", isAnyWild(sym));
+      if (isAnyWild(sym) && wildMult(sym) > 1) cell.dataset.mult = `${wildMult(sym)}x`;
+      else delete cell.dataset.mult;
 
       cell.dataset.x = String(x);
       cell.dataset.y = String(y);
@@ -453,9 +447,9 @@ async function animateFill(grid){
       await wait(stepDelay);
       const el = getCellEl(x,y);
       const sym = grid[y][x];
+
       el.textContent = sym.emoji;
 
-      // update wild classes/mults
       el.classList.toggle("wild", isAnyWild(sym));
       if (isAnyWild(sym) && wildMult(sym) > 1) el.dataset.mult = `${wildMult(sym)}x`;
       else delete el.dataset.mult;
@@ -491,10 +485,12 @@ async function spin(){
   let grid = genGrid();
   await animateFill(grid);
 
-  // LIGHT payout/lamp: each grid state
+  // FS: any wilds that appear become sticky for all remaining FS
+  if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
+
   const light0 = awardLightsFromGrid(grid);
 
-  // FS trigger based on NIGHT count (>=4 anywhere)
+  // FS trigger strictly: NIGHT count >= 4 anywhere
   let nCount = nightCount(grid);
   let triggerFS = (state.freeSpinsLeft === 0) && (nCount >= 4);
 
@@ -525,10 +521,13 @@ async function spin(){
     await wait(90);
     await animateFill(grid);
 
-    // light payouts/lamp can “drop in”
+    // in FS: newly landed wilds become sticky forever (for remaining FS)
+    if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
+
+    // light payouts can drop in
     awardLightsFromGrid(grid);
 
-    // after tumble, re-check NIGHT count for FS
+    // after tumble, re-check FS trigger
     nCount = nightCount(grid);
     if (!triggerFS && state.freeSpinsLeft === 0 && nCount >= 4) triggerFS = true;
 
@@ -537,18 +536,15 @@ async function spin(){
 
   state.lastGrid = grid;
 
-  // sticky wilds (FS only)
-  const newSticky = evalStickyWilds(grid);
-  if (newSticky.length){
-    state.stickyWilds.push(...newSticky);
-  }
-
   // start FS
   if (triggerFS){
     state.freeSpinsLeft = 8;
-    state.stickyWilds = []; // reset sticky on entry (as before)
+    state.stickyWilds = []; // reset sticky on entry
     safePlay(audio.freespins);
   }
+
+  // If we are now in FS (triggered), we start sticky tracking on the first FS spin, not on trigger grid
+  // (keeps your prior behavior: entry resets sticky)
 
   unlockMilestonesIfNeeded();
   renderHud(nCount);
