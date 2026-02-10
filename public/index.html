@@ -26,7 +26,23 @@
     </header>
 
     <section class="board">
-      <div class="grid" id="grid"></div>
+      <div class="gridWrap">
+  <div class="grid" id="grid"></div>
+
+  <!-- line overlay for paylines -->
+  <svg class="lines" id="lines" viewBox="0 0 1000 1000" preserveAspectRatio="none"></svg>
+
+  <!-- win overlay -->
+  <div class="winOverlay" id="winOverlay" hidden>
+    <div class="winCard">
+      <div class="winTitle" id="winTitle">win</div>
+      <div class="winAmount" id="winAmount">+0</div>
+      <div class="winSub" id="winSub">—</div>
+      <button id="winClose" class="tiny">ok</button>
+    </div>
+  </div>
+</div>
+
 
       <aside class="side">
         <div class="panel">
