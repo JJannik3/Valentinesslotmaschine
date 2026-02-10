@@ -56,13 +56,18 @@ const MILESTONES = [
 
 // === symbols (rarer LIGHT + rarer NIGHT) ===
 const SYM = {
-  HEART: { k:"HEART", emoji:"💕", wBase: 20, wFS: 20, payout3: 0.5, payout4: 1.2, payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18, wFS: 18, payout3: 0.45,payout4: 1.1, payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16, wFS: 16, payout3: 0.6, payout4: 1.4, payout5: 3.0 },
-  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10, wFS: 10, payout3: 0.9, payout4: 2.0, payout5: 4.0 }, // premium
-  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,  wFS: 9,  payout3: 1.0, payout4: 2.2, payout5: 4.4 }, // premium
-  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 2.2,wFS: 2.6,payout3: 0.7, payout4: 1.6, payout5: 3.2 }, // freespin meter
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.55, wFS: 0.95 }, // VERY rare
+  HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16,  wFS: 16,  payout3: 0.6, payout4: 1.4, payout5: 3.0 },
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10,  wFS: 10,  payout3: 0.9, payout4: 2.0, payout5: 4.0 }, // premium
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,   wFS: 9,   payout3: 1.0, payout4: 2.2, payout5: 4.4 }, // premium
+
+  // ↑ Boost: slightly higher chance to see NIGHT, so free spins happen more often
+  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.0, wFS: 3.4, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
+
+  // ↑ Boost: more LIGHT in free spins + tiny in base
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.60, wFS: 1.35 },
+
   WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2, wFS: 1.6 }, // sticky in FS
 };
 
@@ -115,8 +120,21 @@ function weightedPick(items, weights) {
   return items[items.length-1];
 }
 
+// ⬇️ changed: LIGHT becomes *slightly* more likely with higher bet (very mild)
 function symbolWeights(isFS){
-  return BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
+  const w = BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
+
+  const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
+  if (lightIndex !== -1){
+    // bet 1..50 -> factor ~0.98..1.20 (mild)
+    const betFactor = 1 + ((state.bet - 10) / 200);
+    w[lightIndex] *= clamp(betFactor, 0.98, 1.20);
+
+    // in FS: tiny extra so FS feels “magic”
+    if (isFS) w[lightIndex] *= 1.06;
+  }
+
+  return w;
 }
 
 function genGrid() {
@@ -154,7 +172,7 @@ function firstNonWildKey(lineSyms){
   for (const s of lineSyms){
     if (s.k !== "WILD") return s.k;
   }
-  // all wild -> treat as STAR for payout (most premium) to keep it exciting
+  // all wild -> treat as STAR for payout (most premium)
   return "STAR";
 }
 
@@ -163,7 +181,7 @@ function evalPaylines(grid, bet){
   const wins = []; // {lineIndex, count, key, amount, points: [{x,y}...]}
 
   for (let li=0; li<PAYLINES.length; li++){
-    const path = PAYLINES[li]; // y index per reel
+    const path = PAYLINES[li];
     const lineSyms = [];
     const points = [];
     for (let x=0;x<GRID_W;x++){
@@ -172,10 +190,8 @@ function evalPaylines(grid, bet){
       points.push({x,y});
     }
 
-    // Determine target symbol based on first non-wild in the line
     const targetKey = firstNonWildKey(lineSyms);
 
-    // Count consecutive matches from left
     let count = 0;
     for (let x=0;x<GRID_W;x++){
       if (isMatch(lineSyms[x], targetKey)) count++;
@@ -192,7 +208,7 @@ function evalPaylines(grid, bet){
         count,
         key: targetKey,
         amount,
-        points: points.slice(0, count) // only highlight matched segment
+        points: points.slice(0, count)
       });
     }
   }
@@ -200,9 +216,54 @@ function evalPaylines(grid, bet){
   return { totalWin, wins };
 }
 
+// === NEW: cascade helpers ===
+function collectWinPositions(wins){
+  const set = new Set();
+  for (const w of wins){
+    for (const p of w.points){
+      set.add(`${p.x},${p.y}`);
+    }
+  }
+  return set;
+}
+
+function applyCascade(grid, winPosSet){
+  const isFS = state.freeSpinsLeft > 0;
+  const weights = symbolWeights(isFS);
+
+  const g = grid.map(row => row.slice());
+
+  // remove winning cells
+  for (const key of winPosSet){
+    const [x,y] = key.split(",").map(Number);
+    g[y][x] = null;
+  }
+
+  // drop + refill per column
+  for (let x=0; x<GRID_W; x++){
+    const col = [];
+    for (let y=GRID_H-1; y>=0; y--){
+      if (g[y][x] !== null) col.push(g[y][x]);
+    }
+    while (col.length < GRID_H){
+      col.push(weightedPick(BASE_SYMBOLS, weights));
+    }
+    for (let y=GRID_H-1, i=0; y>=0; y--, i++){
+      g[y][x] = col[i];
+    }
+  }
+
+  // keep sticky wilds in FS
+  if (isFS && state.stickyWilds.length){
+    for (const p of state.stickyWilds){
+      if (g[p.y]?.[p.x]) g[p.y][p.x] = SYM.WILD;
+    }
+  }
+
+  return g;
+}
+
 // === LIGHT collection (hard mode) ===
-// base +1 light only if: at least 2 LIGHT in the same REEL (column) OR same ROW.
-// in free spins: at least 2 LIGHT anywhere OR 1 LIGHT + 1 WILD in same reel.
 function evalLightGain(grid){
   const isFS = state.freeSpinsLeft > 0;
 
@@ -232,14 +293,21 @@ function evalLightGain(grid){
   if (!isFS){
     return (rowHit || colHit) ? 1 : 0;
   } else {
-    // freespins: slightly easier but still rare
+    // FS: easier: 2 lights anywhere -> gain
     const totalLights = grid.flat().filter(isLight).length;
     if (totalLights >= 2) return 1;
+
+    // FS boost: 1 light + any wild anywhere => small chance
+    const anyWild = grid.flat().some(isWild);
+    if (totalLights >= 1 && anyWild){
+      return Math.random() < 0.35 ? 1 : 0;
+    }
+
     return colHit ? 1 : 0;
   }
 }
 
-// === Freespins trigger meter: 4 unique reels contain NIGHT (harder + cinematic 3/4) ===
+// === Freespins trigger meter: reels contain NIGHT ===
 function nightReelsCount(grid){
   const reels = new Set();
   for (let x=0;x<GRID_W;x++){
@@ -329,7 +397,6 @@ function drawWinningLines(wins){
   clearLines();
   if (!wins.length) return;
 
-  // Map grid cell centers into viewBox coordinates (1000x1000)
   const cellW = 1000 / GRID_W;
   const cellH = 1000 / GRID_H;
 
@@ -390,11 +457,9 @@ async function persist(){
 
 // === Slot-like bottom-to-top fill animation ===
 async function animateFill(grid){
-  // fill each reel bottom -> top with slight stagger per reel
   const cells = [...elGrid.querySelectorAll(".cell")];
   const getCellEl = (x,y)=> cells.find(c => c.dataset.x==String(x) && c.dataset.y==String(y));
 
-  // temporary “blank”
   for (const c of cells) c.textContent = " ";
 
   const reelDelay = 60;
@@ -414,14 +479,13 @@ async function animateFill(grid){
 }
 
 async function spin(){
-  // bg music starts only after interaction
   if (!muted && audio.bg.paused) { try { await audio.bg.play(); } catch {} }
 
   hideWinOverlay();
 
-  const isFS = state.freeSpinsLeft > 0;
+  const isFSStart = state.freeSpinsLeft > 0;
 
-  if (!isFS){
+  if (!isFSStart){
     if (state.coins < state.bet){
       log("not enough coins. (unlocked places stay saved.)");
       return;
@@ -433,26 +497,55 @@ async function spin(){
 
   safePlay(audio.spin);
 
-  const grid = genGrid();
-  state.lastGrid = grid;
+  let grid = genGrid();
 
-  // animate slot fill
+  // animate initial fill
   await animateFill(grid);
 
   // freespin meter
-  const scatterCount = nightReelsCount(grid);
+  let scatterCount = nightReelsCount(grid);
 
-  // trigger FS only if 4/4 reels have NIGHT (hard)
-  const triggerFS = (state.freeSpinsLeft === 0) && (scatterCount >= 4);
+  // Trigger logic:
+  // - classic: 4/4 reels have NIGHT
+  // - boost: if 3/4 reels, small chance to trigger anyway
+  const nearFS = (state.freeSpinsLeft === 0) && (scatterCount === 3);
+  const triggerFS =
+    (state.freeSpinsLeft === 0) &&
+    (scatterCount >= 4 || (nearFS && Math.random() < 0.22));
 
-  // line wins
-  const { totalWin, wins } = evalPaylines(grid, state.bet);
-  if (totalWin > 0){
-    state.coins += totalWin;
+  // === CASCADES ===
+  let totalWin = 0;
+  let lastCascadeWins = [];
+  let cascadeStep = 0;
+
+  while (cascadeStep < 10){
+    const res = evalPaylines(grid, state.bet);
+    if (res.totalWin <= 0) break;
+
+    totalWin += res.totalWin;
+    lastCascadeWins = res.wins;
+
+    state.coins += res.totalWin;
     safePlay(audio.win);
+
+    drawWinningLines(res.wins);
+
+    const winSet = collectWinPositions(res.wins);
+    grid = applyCascade(grid, winSet);
+
+    await new Promise(r => setTimeout(r, 120));
+    await animateFill(grid);
+
+    cascadeStep++;
   }
 
-  // lights gain (hard)
+  // final grid
+  state.lastGrid = grid;
+
+  // re-check scatter after cascades (feels fair + cinematic)
+  scatterCount = nightReelsCount(grid);
+
+  // lights gain
   const gainedLight = (state.lights < 10) ? evalLightGain(grid) : 0;
   if (gainedLight > 0){
     state.lights = clamp(state.lights + gainedLight, 0, 10);
@@ -467,19 +560,16 @@ async function spin(){
 
   // freespins start
   if (triggerFS){
-    state.freeSpinsLeft = 8;        // fewer FS
-    state.stickyWilds = [];         // reset sticky on entry
+    state.freeSpinsLeft = 8;
+    state.stickyWilds = [];
     safePlay(audio.freespins);
   }
 
-  // unlock milestones (with big overlay)
   unlockMilestonesIfNeeded();
 
-  // render hud and lines
   renderHud(scatterCount);
-  drawWinningLines(wins);
+  drawWinningLines(lastCascadeWins);
 
-  // messaging
   const parts = [];
   if (totalWin > 0) parts.push(`win: ${totalWin}`);
   else parts.push("no win");
@@ -489,9 +579,8 @@ async function spin(){
 
   log(parts.join(" · "));
 
-  // show win overlay when win or near FS 3/4
   if (totalWin > 0){
-    const winSummary = wins
+    const winSummary = lastCascadeWins
       .slice(0,3)
       .map(w => `line ${w.lineIndex+1}: ${w.key.toLowerCase()} x${w.count} = +${w.amount}`)
       .join("\n");
@@ -499,9 +588,9 @@ async function spin(){
     showWinOverlay({
       title: "win",
       amount: `+${totalWin} coins`,
-      sub: winSummary
+      sub: winSummary ? winSummary : "nice."
     });
-  } else if (!isFS && scatterCount === 3){
+  } else if (!isFSStart && scatterCount === 3){
     showWinOverlay({
       title: "so close…",
       amount: "3/4 night reels",
