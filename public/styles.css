@@ -251,3 +251,20 @@ input[type="range"]{flex:1}
   content:"wild";
 }
 
+/* LIGHT glow */
+.cell.light{
+  box-shadow:
+    0 0 16px rgba(255,209,102,.16),
+    inset 0 0 0 999px rgba(255,209,102,.05);
+  border-color: rgba(255,209,102,.22);
+}
+
+/* Strong “you got a light!” pulse */
+.cell.light.lightHit{
+  animation: lightPulse .5s ease-out;
+}
+@keyframes lightPulse{
+  0%   { transform: scale(1);   box-shadow: 0 0 0 rgba(255,209,102,0); }
+  35%  { transform: scale(1.03); box-shadow: 0 0 26px rgba(255,209,102,.35), inset 0 0 0 999px rgba(255,209,102,.08); }
+  100% { transform: scale(1);   box-shadow: 0 0 16px rgba(255,209,102,.16), inset 0 0 0 999px rgba(255,209,102,.05); }
+}
