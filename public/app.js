@@ -56,7 +56,8 @@ const MILESTONES = [
 
 // === symbols ===
 // Freespins trigger: NIGHT (🌑) count >= 4 anywhere in grid
-// LIGHT: rarer overall and also rarer in FS (per your request)
+// LIGHT: MUCH rarer overall + strongly degressive with collected lights
+// Wilds in FS: slightly reduced
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
@@ -66,14 +67,14 @@ const SYM = {
 
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
-  // ✅ reduced: rarer in base + rarer in FS
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.18, wFS: 0.34 },
+  // ✅ MUCH rarer base + FS
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.08, wFS: 0.14 },
 
-  // Wilds: base wild exists, multipliers are FS-only rare
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 1.6,  mult: 1 },
-  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.16, mult: 2 },
-  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.075, mult: 3 },
-  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.03, mult: 4 },
+  // Wilds: FS slightly reduced
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 1.35, mult: 1 },
+  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.14, mult: 2 },
+  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.06, mult: 3 },
+  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.022, mult: 4 },
 };
 
 const BASE_SYMBOLS = [
@@ -127,14 +128,22 @@ function wildMult(sym){
   return 1;
 }
 
-// LIGHT stays only minimally bet-affected (very mild), and still rare
+// ✅ LIGHT: strongly degressive with collected lights
+// 0 lights => factor 1
+// 5 lights => ~0.19
+// 10 lights => ~0.036
+function lightDegressiveFactor(){
+  return Math.pow(0.72, state.lights);
+}
+
+// LIGHT is still slightly bet-affected (very mild)
 function symbolWeights(isFS){
   const w = BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
 
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
-    const betFactor = clamp(1 + ((state.bet - 10) / 350), 0.99, 1.12);
-    w[lightIndex] *= betFactor;
+    const betFactor = clamp(1 + ((state.bet - 10) / 600), 0.99, 1.10);
+    w[lightIndex] *= betFactor * lightDegressiveFactor();
   }
   return w;
 }
@@ -284,7 +293,6 @@ function applyCascade(grid, winPosSet){
 
 // === LIGHT mechanics ===
 // each LIGHT appearing awards: +3*bet coins and +1 lamp (up to 10)
-// NOTE: This counts every grid state; if you want "only newly dropped lights", tell me.
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
@@ -323,7 +331,7 @@ function renderScatter(count){
   }
 }
 
-// ✅ VERY IMPORTANT: add sticky wilds when they appear in FS, and KEEP them for all remaining FS
+// add sticky wilds when they appear in FS, and keep them for all remaining FS
 function addStickyWildsFromGrid(grid){
   if (state.freeSpinsLeft <= 0) return;
 
@@ -485,14 +493,22 @@ async function spin(){
   let grid = genGrid();
   await animateFill(grid);
 
-  // FS: any wilds that appear become sticky for all remaining FS
+  // in FS: newly appeared wilds become sticky forever (for remaining FS)
   if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
 
   const light0 = awardLightsFromGrid(grid);
 
-  // FS trigger strictly: NIGHT count >= 4 anywhere
+  // FS entry trigger strictly: NIGHT count >= 4 anywhere (base game only)
   let nCount = nightCount(grid);
   let triggerFS = (state.freeSpinsLeft === 0) && (nCount >= 4);
+
+  // FS retrigger: during FS, if NIGHT >= 4 => +10 FS (once per spin max)
+  let retriggeredThisSpin = false;
+  if (state.freeSpinsLeft > 0 && nCount >= 4 && !retriggeredThisSpin){
+    state.freeSpinsLeft += 10;
+    retriggeredThisSpin = true;
+    safePlay(audio.freespins);
+  }
 
   // === cascades with cluster wins (>=5) ===
   let totalWin = 0;
@@ -521,15 +537,22 @@ async function spin(){
     await wait(90);
     await animateFill(grid);
 
-    // in FS: newly landed wilds become sticky forever (for remaining FS)
     if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
 
-    // light payouts can drop in
     awardLightsFromGrid(grid);
 
-    // after tumble, re-check FS trigger
+    // re-check nights after tumble
     nCount = nightCount(grid);
+
+    // base game -> FS entry can also happen after tumbles
     if (!triggerFS && state.freeSpinsLeft === 0 && nCount >= 4) triggerFS = true;
+
+    // FS retrigger (still once per spin max)
+    if (state.freeSpinsLeft > 0 && nCount >= 4 && !retriggeredThisSpin){
+      state.freeSpinsLeft += 10;
+      retriggeredThisSpin = true;
+      safePlay(audio.freespins);
+    }
 
     cascadeStep++;
   }
@@ -539,12 +562,9 @@ async function spin(){
   // start FS
   if (triggerFS){
     state.freeSpinsLeft = 8;
-    state.stickyWilds = []; // reset sticky on entry
+    state.stickyWilds = []; // reset sticky on entry (as before)
     safePlay(audio.freespins);
   }
-
-  // If we are now in FS (triggered), we start sticky tracking on the first FS spin, not on trigger grid
-  // (keeps your prior behavior: entry resets sticky)
 
   unlockMilestonesIfNeeded();
   renderHud(nCount);
@@ -555,6 +575,7 @@ async function spin(){
   else parts.push("no win");
   if (light0 > 0) parts.push(`💡 x${light0} paid ${light0 * (3 * state.bet)}`);
   if (triggerFS) parts.push("→ FREE SPINS!");
+  if (retriggeredThisSpin) parts.push("+10 retrigger!");
   log(parts.join(" · "));
 
   // overlay
