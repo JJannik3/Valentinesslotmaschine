@@ -169,7 +169,7 @@ input[type="range"]{flex:1}
 
 .winOverlay{
   position:absolute;
-  margin-bottom: -1000px;
+  margin-bottom: -800px;
   inset:0;
   display:grid;
   place-items:center;
