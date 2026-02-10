@@ -167,21 +167,28 @@ input[type="range"]{flex:1}
   stroke-linecap: round;
 }
 
-/* NEUE POSITION: UNTER DER SLOTMASCHINE */
+/* NUR COINS UNTER DEM GRID */
 .winArea{
-  margin-top: 14px;
+  margin-top: 10px;
   display:grid;
   place-items:center;
 }
 
 .winCard{
-  width:min(520px, 100%);
-  border:1px solid rgba(255,255,255,.14);
-  background:linear-gradient(135deg, rgba(255,77,141,.18), rgba(255,46,99,.10));
-  border-radius:22px;
-  padding:16px;
+  width:100%;
+  max-width: 420px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.18);
+  border-radius:14px;
+  padding:10px;
   text-align:center;
 }
+
+.winAmount{
+  font-size: 28px;
+  font-weight: 800;
+}
+
 
 .winCard{
   width:min(420px, 92%);
