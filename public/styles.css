@@ -151,3 +151,69 @@ input[type="range"]{flex:1}
 
 .foot{margin-top:12px;color:rgba(255,255,255,.35)}
 
+
+
+.gridWrap{position:relative}
+.lines{
+  position:absolute;
+  inset:14px; /* same padding look */
+  pointer-events:none;
+  filter: drop-shadow(0 0 10px rgba(255,77,141,.25));
+}
+.lines path{
+  fill:none;
+  stroke: rgba(255,77,141,.95);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.winOverlay{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:rgba(0,0,0,.35);
+  border-radius:18px;
+}
+.winCard{
+  width:min(420px, 92%);
+  border:1px solid rgba(255,255,255,.14);
+  background:linear-gradient(135deg, rgba(255,77,141,.18), rgba(255,46,99,.10));
+  border-radius:22px;
+  padding:18px;
+  text-align:center;
+}
+.winTitle{
+  font-size:14px;
+  letter-spacing:.9px;
+  text-transform:lowercase;
+  color:rgba(255,255,255,.85);
+}
+.winAmount{
+  margin-top:6px;
+  font-size:40px;
+  font-weight:800;
+}
+.winSub{
+  margin-top:6px;
+  color:rgba(255,255,255,.7);
+  font-size:12px;
+  white-space:pre-line;
+}
+.winCard button{margin-top:12px}
+
+.scatter{margin-bottom:10px}
+.scatterLabel{color:var(--muted); font-size:12px; margin-bottom:8px}
+.scatterMeter{display:flex; gap:8px; flex-wrap:wrap}
+.scatterDot{
+  width:22px;height:22px;border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(0,0,0,.25);
+  display:grid;place-items:center;
+  font-size:12px;
+}
+.scatterDot.on{
+  background:rgba(255,77,141,.35);
+  border-color:rgba(255,77,141,.35);
+  box-shadow:0 0 16px rgba(255,77,141,.25);
+}
