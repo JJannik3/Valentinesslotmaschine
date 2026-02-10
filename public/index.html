@@ -1,1 +1,68 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>valentines slotmaschine</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">🦋</div>
+        <div>
+          <h1>moth & light</h1>
+          <p>collect 10 lights to unlock the infinite light.</p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>nickname</span><strong id="nick">—</strong></div>
+        <div class="stat"><span>coins</span><strong id="coins">—</strong></div>
+        <div class="stat"><span>bet</span><strong id="betVal">10</strong></div>
+        <div class="stat"><span>mode</span><strong id="mode">base</strong></div>
+      </div>
+    </header>
+
+    <section class="board">
+      <div class="grid" id="grid"></div>
+
+      <aside class="side">
+        <div class="panel">
+          <h2>lights</h2>
+          <div class="lights" id="lights"></div>
+          <div class="milestones" id="milestones"></div>
+        </div>
+
+        <div class="panel">
+          <h2>controls</h2>
+
+          <div class="row">
+            <button id="betDown">–</button>
+            <input id="bet" type="range" min="1" max="50" value="10" />
+            <button id="betUp">+</button>
+          </div>
+
+          <button class="spin" id="spin">spin</button>
+          <button class="ghost" id="reset">reset game</button>
+
+          <div class="log" id="log"></div>
+
+          <div class="small">
+            <button class="tiny" id="mute">mute</button>
+            <span id="status">connecting…</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <footer class="foot">
+      <small>saved via firebase realtime database · anonymous auth</small>
+    </footer>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
 
