@@ -230,3 +230,24 @@ input[type="range"]{flex:1}
   box-shadow: 0 0 18px rgba(255,209,102,.28), inset 0 0 0 999px rgba(255,209,102,.06);
   transform: translateZ(0);
 }
+
+
+/* win highlight (falls du es noch nicht drin hast) */
+.cell.win{
+  outline: 2px solid rgba(255,209,102,.95);
+  box-shadow: 0 0 18px rgba(255,209,102,.28), inset 0 0 0 999px rgba(255,209,102,.06);
+}
+
+/* wild label: shows multiplier if present, else "wild" */
+.cell.wild::after{
+  content: attr(data-mult);
+  position:absolute;
+  bottom:6px; right:8px;
+  font-size:10px;
+  color:rgba(255,255,255,.85);
+  letter-spacing:.6px;
+}
+.cell.wild:not([data-mult])::after{
+  content:"wild";
+}
+
