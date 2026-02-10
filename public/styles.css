@@ -167,22 +167,16 @@ input[type="range"]{flex:1}
   stroke-linecap: round;
 }
 
-/* NUR COINS UNTER DEM GRID */
-.winArea{
-  margin-top: 10px;
+.winOverlay{
+  position:absolute;
+  margin-bottom: 200px;
+  inset:0;
   display:grid;
   place-items:center;
+  background:rgba(0,0,0,.35);
+  border-radius:18px;
 }
 
-.winCard{
-  width:100%;
-  max-width: 420px;
-  border:1px solid rgba(255,255,255,.12);
-  background:rgba(0,0,0,.18);
-  border-radius:14px;
-  padding:10px;
-  text-align:center;
-}
 
 .winAmount{
   font-size: 28px;
