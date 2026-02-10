@@ -55,9 +55,6 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// Freespins trigger: NIGHT (🌑) count >= 4 anywhere in grid
-// LIGHT: MUCH rarer overall + strongly degressive with collected lights
-// Wilds in FS: slightly reduced
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
@@ -67,8 +64,8 @@ const SYM = {
 
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
-  // ✅ MUCH rarer base + FS
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.08, wFS: 0.14 },
+  // ✅ even rarer now
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.05, wFS: 0.09 },
 
   // Wilds: FS slightly reduced
   WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 1.35, mult: 1 },
@@ -89,6 +86,8 @@ const GRID_H = 5;
 let uid = null;
 let state = defaultState();
 
+let spinning = false; // ✅ spin lock
+
 function defaultState() {
   return {
     nickname: NICKNAME,
@@ -97,8 +96,7 @@ function defaultState() {
     lights: 0,
     unlocked: [],
     freeSpinsLeft: 0,
-    // stores {x,y,k} and persists across ALL remaining FS spins
-    stickyWilds: [],
+    stickyWilds: [], // {x,y,k} persistent during FS
     lastGrid: null,
   };
 }
@@ -107,6 +105,13 @@ function log(msg) { elLog.textContent = msg; }
 function status(msg){ elStatus.textContent = msg; }
 function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
 const wait = (ms)=> new Promise(r=>setTimeout(r, ms));
+
+function setSpinLocked(locked){
+  spinning = locked;
+  btnSpin.disabled = locked;
+  btnSpin.style.opacity = locked ? "0.65" : "";
+  btnSpin.style.cursor = locked ? "not-allowed" : "";
+}
 
 function weightedPick(items, weights) {
   let sum = weights.reduce((s,w)=>s+w,0);
@@ -128,21 +133,21 @@ function wildMult(sym){
   return 1;
 }
 
-// ✅ LIGHT: strongly degressive with collected lights
-// 0 lights => factor 1
-// 5 lights => ~0.19
-// 10 lights => ~0.036
+// ✅ stronger degressive
+// 0 lights => 1.0
+// 5 lights => ~0.107
+// 10 lights => ~0.011
 function lightDegressiveFactor(){
-  return Math.pow(0.72, state.lights);
+  return Math.pow(0.64, state.lights);
 }
 
-// LIGHT is still slightly bet-affected (very mild)
 function symbolWeights(isFS){
   const w = BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
 
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
-    const betFactor = clamp(1 + ((state.bet - 10) / 600), 0.99, 1.10);
+    // bet influence stays tiny
+    const betFactor = clamp(1 + ((state.bet - 10) / 800), 0.99, 1.08);
     w[lightIndex] *= betFactor * lightDegressiveFactor();
   }
   return w;
@@ -172,22 +177,18 @@ function genGrid() {
     }
   }
 
-  // sticky wilds persist across ALL FS spins
   if (isFS) applyStickyWildsToGrid(grid);
-
   return grid;
 }
 
-// === CLUSTER WINS (NO PAYLINES) ===
+// === CLUSTER WINS (>=5) ===
 const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR, SYM.NIGHT];
 const PAYABLE_KEYS = new Set(PAYABLE.map(s => s.k));
-
 const CLUSTER_MIN = 5;
 
 function symbolByKey(k){ return PAYABLE.find(s=>s.k===k); }
 
 function payoutMultForSize(sym, size){
-  // 5-6 => payout3, 7-8 => payout4, 9+ => payout5
   if (size >= 9) return sym.payout5;
   if (size >= 7) return sym.payout4;
   return sym.payout3;
@@ -265,13 +266,11 @@ function applyCascade(grid, winPosSet){
 
   const g = grid.map(row => row.slice());
 
-  // remove winning cells
   for (const key of winPosSet){
     const [x,y] = key.split(",").map(Number);
     g[y][x] = null;
   }
 
-  // drop + refill per column
   for (let x=0; x<GRID_W; x++){
     const col = [];
     for (let y=GRID_H-1; y>=0; y--){
@@ -285,14 +284,11 @@ function applyCascade(grid, winPosSet){
     }
   }
 
-  // re-apply sticky wilds across ALL FS spins
   if (isFS) applyStickyWildsToGrid(g);
-
   return g;
 }
 
 // === LIGHT mechanics ===
-// each LIGHT appearing awards: +3*bet coins and +1 lamp (up to 10)
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
@@ -309,7 +305,7 @@ function awardLightsFromGrid(grid){
   return found;
 }
 
-// === Freespins trigger: NIGHT count >= 4 anywhere ===
+// === FS trigger + retrigger ===
 function nightCount(grid){
   let c = 0;
   for (let y=0;y<GRID_H;y++){
@@ -331,7 +327,7 @@ function renderScatter(count){
   }
 }
 
-// add sticky wilds when they appear in FS, and keep them for all remaining FS
+// sticky wild collection during FS
 function addStickyWildsFromGrid(grid){
   if (state.freeSpinsLeft <= 0) return;
 
@@ -368,9 +364,13 @@ function renderGrid(grid){
 
       cell.textContent = sym.emoji;
 
+      // wild
       cell.classList.toggle("wild", isAnyWild(sym));
       if (isAnyWild(sym) && wildMult(sym) > 1) cell.dataset.mult = `${wildMult(sym)}x`;
       else delete cell.dataset.mult;
+
+      // light glow baseline class
+      cell.classList.toggle("light", sym.k === "LIGHT");
 
       cell.dataset.x = String(x);
       cell.dataset.y = String(y);
@@ -440,6 +440,18 @@ function clearWinMarks(){
   for (const c of cells) c.classList.remove("win");
 }
 
+// === light hit flash ===
+function flashLightCells(){
+  const cells = [...elGrid.querySelectorAll(".cell.light")];
+  for (const c of cells){
+    c.classList.remove("lightHit");
+    // restart animation
+    void c.offsetWidth;
+    c.classList.add("lightHit");
+    setTimeout(()=>c.classList.remove("lightHit"), 520);
+  }
+}
+
 // === Slot-like bottom-to-top fill animation ===
 async function animateFill(grid){
   const cells = [...elGrid.querySelectorAll(".cell")];
@@ -462,143 +474,146 @@ async function animateFill(grid){
       if (isAnyWild(sym) && wildMult(sym) > 1) el.dataset.mult = `${wildMult(sym)}x`;
       else delete el.dataset.mult;
 
+      el.classList.toggle("light", sym.k === "LIGHT");
+
       el.classList.add("pop");
       setTimeout(()=>el.classList.remove("pop"), 130);
     }
     await wait(reelDelay);
   }
+
+  // after a fill finishes, if any lights exist, flash them
+  if (grid.flat().some(s => s.k === "LIGHT")) flashLightCells();
 }
 
 async function spin(){
-  if (!muted && audio.bg.paused) { try { await audio.bg.play(); } catch {} }
+  if (spinning) return; // ✅ lock
+  setSpinLocked(true);
 
-  hideWinOverlay();
-  clearLines();
-  clearWinMarks();
+  try {
+    if (!muted && audio.bg.paused) { try { await audio.bg.play(); } catch {} }
 
-  const wasFS = state.freeSpinsLeft > 0;
+    hideWinOverlay();
+    clearLines();
+    clearWinMarks();
 
-  if (!wasFS){
-    if (state.coins < state.bet){
-      log("not enough coins. (unlocked places stay saved.)");
-      return;
+    const wasFS = state.freeSpinsLeft > 0;
+
+    if (!wasFS){
+      if (state.coins < state.bet){
+        log("not enough coins. (unlocked places stay saved.)");
+        return;
+      }
+      state.coins -= state.bet;
+    } else {
+      state.freeSpinsLeft -= 1;
     }
-    state.coins -= state.bet;
-  } else {
-    state.freeSpinsLeft -= 1;
-  }
 
-  safePlay(audio.spin);
+    safePlay(audio.spin);
 
-  let grid = genGrid();
-  await animateFill(grid);
-
-  // in FS: newly appeared wilds become sticky forever (for remaining FS)
-  if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
-
-  const light0 = awardLightsFromGrid(grid);
-
-  // FS entry trigger strictly: NIGHT count >= 4 anywhere (base game only)
-  let nCount = nightCount(grid);
-  let triggerFS = (state.freeSpinsLeft === 0) && (nCount >= 4);
-
-  // FS retrigger: during FS, if NIGHT >= 4 => +10 FS (once per spin max)
-  let retriggeredThisSpin = false;
-  if (state.freeSpinsLeft > 0 && nCount >= 4 && !retriggeredThisSpin){
-    state.freeSpinsLeft += 10;
-    retriggeredThisSpin = true;
-    safePlay(audio.freespins);
-  }
-
-  // === cascades with cluster wins (>=5) ===
-  let totalWin = 0;
-  let lastWins = [];
-  let cascadeStep = 0;
-
-  while (cascadeStep < 12){
-    const res = evalClusters(grid, state.bet);
-    if (res.totalWin <= 0) break;
-
-    totalWin += res.totalWin;
-    lastWins = res.wins;
-
-    state.coins += res.totalWin;
-    safePlay(audio.win);
-
-    const winSet = collectWinPositionsFromClusters(res.wins);
-
-    clearWinMarks();
-    markWinCells(winSet);
-    await wait(240);
-
-    grid = applyCascade(grid, winSet);
-
-    clearWinMarks();
-    await wait(90);
+    let grid = genGrid();
     await animateFill(grid);
 
     if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
 
-    awardLightsFromGrid(grid);
+    const light0 = awardLightsFromGrid(grid);
 
-    // re-check nights after tumble
-    nCount = nightCount(grid);
+    let nCount = nightCount(grid);
+    let triggerFS = (state.freeSpinsLeft === 0) && (nCount >= 4);
 
-    // base game -> FS entry can also happen after tumbles
-    if (!triggerFS && state.freeSpinsLeft === 0 && nCount >= 4) triggerFS = true;
-
-    // FS retrigger (still once per spin max)
+    // FS retrigger: during FS, if NIGHT >= 4 => +10 FS (once per spin max)
+    let retriggeredThisSpin = false;
     if (state.freeSpinsLeft > 0 && nCount >= 4 && !retriggeredThisSpin){
       state.freeSpinsLeft += 10;
       retriggeredThisSpin = true;
       safePlay(audio.freespins);
     }
 
-    cascadeStep++;
+    let totalWin = 0;
+    let lastWins = [];
+    let cascadeStep = 0;
+
+    while (cascadeStep < 12){
+      const res = evalClusters(grid, state.bet);
+      if (res.totalWin <= 0) break;
+
+      totalWin += res.totalWin;
+      lastWins = res.wins;
+
+      state.coins += res.totalWin;
+      safePlay(audio.win);
+
+      const winSet = collectWinPositionsFromClusters(res.wins);
+
+      clearWinMarks();
+      markWinCells(winSet);
+      await wait(240);
+
+      grid = applyCascade(grid, winSet);
+
+      clearWinMarks();
+      await wait(90);
+      await animateFill(grid);
+
+      if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
+
+      awardLightsFromGrid(grid);
+
+      nCount = nightCount(grid);
+
+      if (!triggerFS && state.freeSpinsLeft === 0 && nCount >= 4) triggerFS = true;
+
+      if (state.freeSpinsLeft > 0 && nCount >= 4 && !retriggeredThisSpin){
+        state.freeSpinsLeft += 10;
+        retriggeredThisSpin = true;
+        safePlay(audio.freespins);
+      }
+
+      cascadeStep++;
+    }
+
+    state.lastGrid = grid;
+
+    if (triggerFS){
+      state.freeSpinsLeft = 8;
+      state.stickyWilds = [];
+      safePlay(audio.freespins);
+    }
+
+    unlockMilestonesIfNeeded();
+    renderHud(nCount);
+
+    const parts = [];
+    if (totalWin > 0) parts.push(`win: ${totalWin}`);
+    else parts.push("no win");
+    if (light0 > 0) parts.push(`💡 x${light0} paid ${light0 * (3 * state.bet)}`);
+    if (triggerFS) parts.push("→ FREE SPINS!");
+    if (retriggeredThisSpin) parts.push("+10 retrigger!");
+    log(parts.join(" · "));
+
+    if (totalWin > 0){
+      const summary = lastWins
+        .slice(0,3)
+        .map(w => `${w.key.toLowerCase()} cluster x${w.size}${w.maxWild>1 ? ` · ${w.maxWild}x` : ""} = +${w.amount}`)
+        .join("\n");
+
+      showWinOverlay({
+        title: "win",
+        amount: `+${totalWin} coins`,
+        sub: summary || "nice."
+      });
+    } else if (!wasFS && nCount === 3){
+      showWinOverlay({
+        title: "so close…",
+        amount: "3/4 night",
+        sub: "need 4 night symbols to unlock free spins."
+      });
+    }
+
+    await persist();
+  } finally {
+    setSpinLocked(false);
   }
-
-  state.lastGrid = grid;
-
-  // start FS
-  if (triggerFS){
-    state.freeSpinsLeft = 8;
-    state.stickyWilds = []; // reset sticky on entry (as before)
-    safePlay(audio.freespins);
-  }
-
-  unlockMilestonesIfNeeded();
-  renderHud(nCount);
-
-  // log
-  const parts = [];
-  if (totalWin > 0) parts.push(`win: ${totalWin}`);
-  else parts.push("no win");
-  if (light0 > 0) parts.push(`💡 x${light0} paid ${light0 * (3 * state.bet)}`);
-  if (triggerFS) parts.push("→ FREE SPINS!");
-  if (retriggeredThisSpin) parts.push("+10 retrigger!");
-  log(parts.join(" · "));
-
-  // overlay
-  if (totalWin > 0){
-    const summary = lastWins
-      .slice(0,3)
-      .map(w => `${w.key.toLowerCase()} cluster x${w.size}${w.maxWild>1 ? ` · ${w.maxWild}x` : ""} = +${w.amount}`)
-      .join("\n");
-
-    showWinOverlay({
-      title: "win",
-      amount: `+${totalWin} coins`,
-      sub: summary || "nice."
-    });
-  } else if (!wasFS && nCount === 3){
-    showWinOverlay({
-      title: "so close…",
-      amount: "3/4 night",
-      sub: "need 4 night symbols to unlock free spins."
-    });
-  }
-
-  await persist();
 }
 
 function toggleMute(){
