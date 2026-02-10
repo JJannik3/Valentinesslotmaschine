@@ -222,3 +222,11 @@ input[type="range"]{flex:1}
   border-color:rgba(255,77,141,.35);
   box-shadow:0 0 16px rgba(255,77,141,.25);
 }
+
+
+/* highlight winning cells before they disappear */
+.cell.win{
+  outline: 2px solid rgba(255,209,102,.95);
+  box-shadow: 0 0 18px rgba(255,209,102,.28), inset 0 0 0 999px rgba(255,209,102,.06);
+  transform: translateZ(0);
+}
