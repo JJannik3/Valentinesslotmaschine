@@ -11,13 +11,22 @@ const elLog = document.getElementById("log");
 const elStatus = document.getElementById("status");
 const elNick = document.getElementById("nick");
 
+const elLines = document.getElementById("lines");
+const elWinOverlay = document.getElementById("winOverlay");
+const elWinTitle = document.getElementById("winTitle");
+const elWinAmount = document.getElementById("winAmount");
+const elWinSub = document.getElementById("winSub");
+const btnWinClose = document.getElementById("winClose");
+
+const elScatterMeter = document.getElementById("scatterMeter");
+
 const btnSpin = document.getElementById("spin");
 const btnBetDown = document.getElementById("betDown");
 const btnBetUp = document.getElementById("betUp");
 const btnReset = document.getElementById("reset");
 const btnMute = document.getElementById("mute");
 
-// === AUDIO (pack deine files in public/assets/audio/) ===
+// === AUDIO ===
 const audio = {
   bg: new Audio("./assets/audio/bg.mp3"),
   spin: new Audio("./assets/audio/spin.wav"),
@@ -34,8 +43,9 @@ function safePlay(a) {
   try { a.currentTime = 0; a.play(); } catch {}
 }
 
-const NICKNAME = "SlotMaschineLondon";
+const NICKNAME = "Valentinsgift";
 
+// === milestones (hidden until unlocked) ===
 const MILESTONES = [
   { lights: 2,  place: "gersberg bei leinburg" },
   { lights: 4,  place: "garmisch-partenkirchen" },
@@ -44,22 +54,36 @@ const MILESTONES = [
   { lights: 10, place: "london (infinite light)" },
 ];
 
-// symbols
+// === symbols (rarer LIGHT + rarer NIGHT) ===
 const SYM = {
-  HEART: { k:"HEART",  emoji:"💕", baseWeight: 18, payout3: 0.4, payout4: 0.9, payout5: 2.0 },
-  MOON:  { k:"MOON",   emoji:"🌙", baseWeight: 16, payout3: 0.35,payout4: 0.8, payout5: 1.8 },
-  MOTH:  { k:"MOTH",   emoji:"🦋", baseWeight: 14, payout3: 0.5, payout4: 1.2, payout5: 2.6 },
-  ROSE:  { k:"ROSE",   emoji:"🌹", baseWeight: 10, payout3: 0.7, payout4: 1.6, payout5: 3.4 }, // premium
-  STAR:  { k:"STAR",   emoji:"✨", baseWeight: 10, payout3: 0.75,payout4: 1.7, payout5: 3.6 }, // premium
-  NIGHT: { k:"NIGHT",  emoji:"🌑", baseWeight: 9,  payout3: 0.6, payout4: 1.4, payout5: 3.0 }, // triggers freespins
-  LIGHT: { k:"LIGHT",  emoji:"💡", baseWeight: 4  }, // progress symbol
-  WILD:  { k:"WILD",   emoji:"🔮", baseWeight: 3  }, // acts as any symbol
+  HEART: { k:"HEART", emoji:"💕", wBase: 20, wFS: 20, payout3: 0.5, payout4: 1.2, payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18, wFS: 18, payout3: 0.45,payout4: 1.1, payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16, wFS: 16, payout3: 0.6, payout4: 1.4, payout5: 3.0 },
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10, wFS: 10, payout3: 0.9, payout4: 2.0, payout5: 4.0 }, // premium
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,  wFS: 9,  payout3: 1.0, payout4: 2.2, payout5: 4.4 }, // premium
+  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 2.2,wFS: 2.6,payout3: 0.7, payout4: 1.6, payout5: 3.2 }, // freespin meter
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.55, wFS: 0.95 }, // VERY rare
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2, wFS: 1.6 }, // sticky in FS
 };
 
 const BASE_SYMBOLS = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR, SYM.NIGHT, SYM.LIGHT, SYM.WILD];
 
 const GRID_W = 5;
 const GRID_H = 5;
+
+// 10 simple paylines (row indices per reel)
+const PAYLINES = [
+  [0,0,0,0,0],
+  [1,1,1,1,1],
+  [2,2,2,2,2],
+  [3,3,3,3,3],
+  [4,4,4,4,4],
+  [0,1,2,1,0],
+  [4,3,2,3,4],
+  [0,0,1,0,0],
+  [4,4,3,4,4],
+  [1,2,3,2,1],
+];
 
 let uid = null;
 let state = defaultState();
@@ -72,15 +96,14 @@ function defaultState() {
     lights: 0,
     unlocked: [],
     freeSpinsLeft: 0,
-    stickyWilds: [], // array of {x,y}
+    stickyWilds: [], // {x,y}
     lastGrid: null,
   };
 }
 
 function log(msg) { elLog.textContent = msg; }
 function status(msg){ elStatus.textContent = msg; }
-
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
 
 function weightedPick(items, weights) {
   let sum = weights.reduce((s,w)=>s+w,0);
@@ -92,14 +115,8 @@ function weightedPick(items, weights) {
   return items[items.length-1];
 }
 
-function symbolWeights(isFreeSpins){
-  // In freespins: LIGHT higher chance, WILD a bit higher
-  return BASE_SYMBOLS.map(s => {
-    if (!isFreeSpins) return s.baseWeight;
-    if (s.k === "LIGHT") return s.baseWeight * 3;
-    if (s.k === "WILD")  return s.baseWeight * 1.6;
-    return s.baseWeight;
-  });
+function symbolWeights(isFS){
+  return BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
 }
 
 function genGrid() {
@@ -114,7 +131,7 @@ function genGrid() {
     }
   }
 
-  // apply sticky wilds in freespins
+  // sticky wilds in FS
   if (isFS && state.stickyWilds.length){
     for (const p of state.stickyWilds){
       if (grid[p.y]?.[p.x]) grid[p.y][p.x] = SYM.WILD;
@@ -124,43 +141,116 @@ function genGrid() {
   return grid;
 }
 
-// “Ways”-like evaluation: for each symbol, count occurrences per reel.
-// Winning streak is consecutive reels from left with count>0 (WILD counts as match).
-function evaluate(grid, bet) {
-  const reels = [];
-  for (let x=0;x<GRID_W;x++){
-    const col = [];
-    for (let y=0;y<GRID_H;y++) col.push(grid[y][x]);
-    reels.push(col);
+// === helpers for line wins ===
+const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR, SYM.NIGHT];
+
+function symbolByKey(k){ return PAYABLE.find(s=>s.k===k); }
+
+function isMatch(sym, targetKey){
+  return sym.k === targetKey || sym.k === "WILD";
+}
+
+function firstNonWildKey(lineSyms){
+  for (const s of lineSyms){
+    if (s.k !== "WILD") return s.k;
   }
+  // all wild -> treat as STAR for payout (most premium) to keep it exciting
+  return "STAR";
+}
 
-  const payables = [SYM.HEART,SYM.MOON,SYM.MOTH,SYM.ROSE,SYM.STAR,SYM.NIGHT]; // LIGHT not paid, WILD not directly paid
+function evalPaylines(grid, bet){
   let totalWin = 0;
+  const wins = []; // {lineIndex, count, key, amount, points: [{x,y}...]}
 
-  for (const sym of payables){
-    const counts = reels.map(col => col.filter(s => s.k===sym.k || s.k==="WILD").length);
-    let streak = 0;
-    for (let i=0;i<counts.length;i++){
-      if (counts[i] > 0) streak++;
+  for (let li=0; li<PAYLINES.length; li++){
+    const path = PAYLINES[li]; // y index per reel
+    const lineSyms = [];
+    const points = [];
+    for (let x=0;x<GRID_W;x++){
+      const y = path[x];
+      lineSyms.push(grid[y][x]);
+      points.push({x,y});
+    }
+
+    // Determine target symbol based on first non-wild in the line
+    const targetKey = firstNonWildKey(lineSyms);
+
+    // Count consecutive matches from left
+    let count = 0;
+    for (let x=0;x<GRID_W;x++){
+      if (isMatch(lineSyms[x], targetKey)) count++;
       else break;
     }
-    if (streak >= 3){
-      const ways = counts.slice(0,streak).reduce((p,c)=>p*c,1);
-      const mult = streak===3 ? sym.payout3 : streak===4 ? sym.payout4 : sym.payout5;
-      const win = Math.floor(bet * ways * mult);
-      totalWin += win;
+
+    if (count >= 3){
+      const sym = symbolByKey(targetKey);
+      const mult = count===3 ? sym.payout3 : count===4 ? sym.payout4 : sym.payout5;
+      const amount = Math.floor(bet * mult);
+      totalWin += amount;
+      wins.push({
+        lineIndex: li,
+        count,
+        key: targetKey,
+        amount,
+        points: points.slice(0, count) // only highlight matched segment
+      });
     }
   }
 
-  // LIGHT occurrences: if >=3 anywhere -> +1 light progress
-  const lightCount = grid.flat().filter(s=>s.k==="LIGHT").length;
-  const gainedLight = lightCount >= 3 ? 1 : 0;
+  return { totalWin, wins };
+}
 
-  // Freespins: if >=4 NIGHT anywhere -> 10 FS (only if currently not in FS)
-  const nightCount = grid.flat().filter(s=>s.k==="NIGHT").length;
-  const triggerFS = (state.freeSpinsLeft === 0) && (nightCount >= 4);
+// === LIGHT collection (hard mode) ===
+// base +1 light only if: at least 2 LIGHT in the same REEL (column) OR same ROW.
+// in free spins: at least 2 LIGHT anywhere OR 1 LIGHT + 1 WILD in same reel.
+function evalLightGain(grid){
+  const isFS = state.freeSpinsLeft > 0;
 
-  // In freespins: any WILD landed becomes sticky (add positions)
+  const isLight = (s)=> s.k==="LIGHT";
+  const isWild = (s)=> s.k==="WILD";
+
+  // rows
+  let rowHit = false;
+  for (let y=0;y<GRID_H;y++){
+    const lights = grid[y].filter(isLight).length;
+    if (lights >= 2) rowHit = true;
+  }
+
+  // cols
+  let colHit = false;
+  for (let x=0;x<GRID_W;x++){
+    let lights = 0;
+    let wilds = 0;
+    for (let y=0;y<GRID_H;y++){
+      if (isLight(grid[y][x])) lights++;
+      if (isWild(grid[y][x])) wilds++;
+    }
+    if (!isFS && lights >= 2) colHit = true;
+    if (isFS && (lights >= 2 || (lights>=1 && wilds>=1))) colHit = true;
+  }
+
+  if (!isFS){
+    return (rowHit || colHit) ? 1 : 0;
+  } else {
+    // freespins: slightly easier but still rare
+    const totalLights = grid.flat().filter(isLight).length;
+    if (totalLights >= 2) return 1;
+    return colHit ? 1 : 0;
+  }
+}
+
+// === Freespins trigger meter: 4 unique reels contain NIGHT (harder + cinematic 3/4) ===
+function nightReelsCount(grid){
+  const reels = new Set();
+  for (let x=0;x<GRID_W;x++){
+    for (let y=0;y<GRID_H;y++){
+      if (grid[y][x].k === "NIGHT") { reels.add(x); break; }
+    }
+  }
+  return reels.size;
+}
+
+function evalStickyWilds(grid){
   const newSticky = [];
   if (state.freeSpinsLeft > 0){
     for (let y=0;y<GRID_H;y++){
@@ -172,19 +262,30 @@ function evaluate(grid, bet) {
       }
     }
   }
-
-  return { totalWin, gainedLight, triggerFS, newSticky };
+  return newSticky;
 }
 
+function unlockMilestonesIfNeeded(){
+  for (const m of MILESTONES){
+    if (state.lights >= m.lights && !state.unlocked.includes(m.place)){
+      state.unlocked.push(m.place);
+      showBigUnlock(m.place);
+    }
+  }
+}
+
+// === UI render ===
 function renderGrid(grid){
   elGrid.innerHTML = "";
   for (let y=0;y<GRID_H;y++){
     for (let x=0;x<GRID_W;x++){
       const cell = document.createElement("div");
-      cell.className = "cell pop";
+      cell.className = "cell";
       const sym = grid[y][x];
       cell.textContent = sym.emoji;
       if (sym.k === "WILD") cell.classList.add("wild");
+      cell.dataset.x = String(x);
+      cell.dataset.y = String(y);
       elGrid.appendChild(cell);
     }
   }
@@ -201,27 +302,85 @@ function renderLights(){
   const lines = [];
   for (const m of MILESTONES){
     const unlocked = state.unlocked.includes(m.place);
-    const statusTxt = unlocked ? "✅ unlocked" : (state.lights >= m.lights ? "✨ ready" : "—");
-    lines.push(`${m.lights}/10 → ${m.place}  ${statusTxt}`);
+    if (unlocked){
+      lines.push(`${m.lights}/10 → ${m.place}  ✅ unlocked`);
+    } else {
+      lines.push(`${m.lights}/10 → ???`);
+    }
   }
   elMilestones.textContent = lines.join("\n");
 }
 
-function renderHud(){
+function renderScatter(count){
+  elScatterMeter.innerHTML = "";
+  for (let i=0;i<4;i++){
+    const d = document.createElement("div");
+    d.className = "scatterDot" + (i < count ? " on" : "");
+    d.textContent = "🌑";
+    elScatterMeter.appendChild(d);
+  }
+}
+
+function clearLines(){
+  elLines.innerHTML = "";
+}
+
+function drawWinningLines(wins){
+  clearLines();
+  if (!wins.length) return;
+
+  // Map grid cell centers into viewBox coordinates (1000x1000)
+  const cellW = 1000 / GRID_W;
+  const cellH = 1000 / GRID_H;
+
+  for (const w of wins){
+    const pts = w.points.map(p => {
+      const cx = (p.x + 0.5) * cellW;
+      const cy = (p.y + 0.5) * cellH;
+      return [cx, cy];
+    });
+
+    const d = pts.map((pt, i) => `${i===0 ? "M":"L"} ${pt[0].toFixed(2)} ${pt[1].toFixed(2)}`).join(" ");
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d", d);
+    elLines.appendChild(path);
+  }
+}
+
+function renderHud(scatterCount = 0){
   elNick.textContent = state.nickname || NICKNAME;
   elCoins.textContent = state.coins;
   elBet.value = state.bet;
   elBetVal.textContent = state.bet;
   elMode.textContent = state.freeSpinsLeft > 0 ? `free spins (${state.freeSpinsLeft})` : "base";
   renderLights();
+  renderScatter(scatterCount);
 }
 
-function unlockMilestonesIfNeeded(){
-  for (const m of MILESTONES){
-    if (state.lights >= m.lights && !state.unlocked.includes(m.place)){
-      state.unlocked.push(m.place);
-    }
-  }
+function showWinOverlay({title, amount, sub}){
+  elWinTitle.textContent = title;
+  elWinAmount.textContent = amount;
+  elWinSub.textContent = sub || "";
+  elWinOverlay.hidden = false;
+}
+
+function hideWinOverlay(){
+  elWinOverlay.hidden = true;
+}
+
+function showBigUnlock(place){
+  safePlay(audio.win);
+  showWinOverlay({
+    title: "unlocked",
+    amount: place,
+    sub: "this destination is now saved forever."
+  });
+}
+
+function clampBetAndPersist(){
+  state.bet = clamp(state.bet, 1, 50);
+  renderHud();
+  return persist();
 }
 
 async function persist(){
@@ -229,11 +388,36 @@ async function persist(){
   await saveGame(uid, state);
 }
 
-async function spin(){
-  // start bg music on first interaction
-  if (!muted && audio.bg.paused) {
-    try { await audio.bg.play(); } catch {}
+// === Slot-like bottom-to-top fill animation ===
+async function animateFill(grid){
+  // fill each reel bottom -> top with slight stagger per reel
+  const cells = [...elGrid.querySelectorAll(".cell")];
+  const getCellEl = (x,y)=> cells.find(c => c.dataset.x==String(x) && c.dataset.y==String(y));
+
+  // temporary “blank”
+  for (const c of cells) c.textContent = " ";
+
+  const reelDelay = 60;
+  const stepDelay = 28;
+
+  for (let x=0;x<GRID_W;x++){
+    for (let y=GRID_H-1;y>=0;y--){
+      await new Promise(r => setTimeout(r, stepDelay));
+      const el = getCellEl(x,y);
+      el.textContent = grid[y][x].emoji;
+      if (grid[y][x].k === "WILD") el.classList.add("wild"); else el.classList.remove("wild");
+      el.classList.add("pop");
+      setTimeout(()=>el.classList.remove("pop"), 130);
+    }
+    await new Promise(r => setTimeout(r, reelDelay));
   }
+}
+
+async function spin(){
+  // bg music starts only after interaction
+  if (!muted && audio.bg.paused) { try { await audio.bg.play(); } catch {} }
+
+  hideWinOverlay();
 
   const isFS = state.freeSpinsLeft > 0;
 
@@ -252,42 +436,78 @@ async function spin(){
   const grid = genGrid();
   state.lastGrid = grid;
 
-  const r = evaluate(grid, state.bet);
+  // animate slot fill
+  await animateFill(grid);
 
-  // apply sticky wilds gained in FS
-  if (r.newSticky.length){
-    state.stickyWilds.push(...r.newSticky);
-  }
+  // freespin meter
+  const scatterCount = nightReelsCount(grid);
 
-  // wins
-  if (r.totalWin > 0){
-    state.coins += r.totalWin;
+  // trigger FS only if 4/4 reels have NIGHT (hard)
+  const triggerFS = (state.freeSpinsLeft === 0) && (scatterCount >= 4);
+
+  // line wins
+  const { totalWin, wins } = evalPaylines(grid, state.bet);
+  if (totalWin > 0){
+    state.coins += totalWin;
     safePlay(audio.win);
   }
 
-  // lights
-  if (r.gainedLight > 0 && state.lights < 10){
-    state.lights += r.gainedLight;
-    state.lights = clamp(state.lights, 0, 10);
+  // lights gain (hard)
+  const gainedLight = (state.lights < 10) ? evalLightGain(grid) : 0;
+  if (gainedLight > 0){
+    state.lights = clamp(state.lights + gainedLight, 0, 10);
     safePlay(audio.light);
   }
 
-  // freespins trigger
-  if (r.triggerFS){
-    state.freeSpinsLeft = 10;
-    state.stickyWilds = []; // reset sticky set when FS start
+  // sticky wilds
+  const newSticky = evalStickyWilds(grid);
+  if (newSticky.length){
+    state.stickyWilds.push(...newSticky);
+  }
+
+  // freespins start
+  if (triggerFS){
+    state.freeSpinsLeft = 8;        // fewer FS
+    state.stickyWilds = [];         // reset sticky on entry
     safePlay(audio.freespins);
   }
 
+  // unlock milestones (with big overlay)
   unlockMilestonesIfNeeded();
 
-  renderGrid(grid);
-  renderHud();
+  // render hud and lines
+  renderHud(scatterCount);
+  drawWinningLines(wins);
 
-  const winText = r.totalWin > 0 ? `win: ${r.totalWin}` : "no win";
-  const lightText = r.gainedLight ? " +1 light" : "";
-  const fsText = r.triggerFS ? " → FREE SPINS!" : "";
-  log(`${winText}${lightText}${fsText}`);
+  // messaging
+  const parts = [];
+  if (totalWin > 0) parts.push(`win: ${totalWin}`);
+  else parts.push("no win");
+
+  if (gainedLight) parts.push("+1 light");
+  if (triggerFS) parts.push("→ FREE SPINS!");
+
+  log(parts.join(" · "));
+
+  // show win overlay when win or near FS 3/4
+  if (totalWin > 0){
+    const winSummary = wins
+      .slice(0,3)
+      .map(w => `line ${w.lineIndex+1}: ${w.key.toLowerCase()} x${w.count} = +${w.amount}`)
+      .join("\n");
+
+    showWinOverlay({
+      title: "win",
+      amount: `+${totalWin} coins`,
+      sub: winSummary
+    });
+  } else if (!isFS && scatterCount === 3){
+    showWinOverlay({
+      title: "so close…",
+      amount: "3/4 night reels",
+      sub: "one more night reel unlocks free spins."
+    });
+  }
 
   await persist();
 }
@@ -302,37 +522,39 @@ function toggleMute(){
   }
 }
 
-// UI events
+// === events ===
 elBet.addEventListener("input", async () => {
   state.bet = Number(elBet.value);
-  renderHud();
-  await persist();
+  await clampBetAndPersist();
 });
 
 btnBetDown.addEventListener("click", async ()=> {
   state.bet = clamp(state.bet - 1, 1, 50);
-  renderHud();
-  await persist();
+  await clampBetAndPersist();
 });
 btnBetUp.addEventListener("click", async ()=> {
   state.bet = clamp(state.bet + 1, 1, 50);
-  renderHud();
-  await persist();
+  await clampBetAndPersist();
 });
 
 btnSpin.addEventListener("click", spin);
 
 btnReset.addEventListener("click", async ()=> {
   state = defaultState();
+  clearLines();
   renderGrid(genGrid());
-  renderHud();
+  renderHud(0);
   log("reset done.");
   await persist();
 });
 
 btnMute.addEventListener("click", toggleMute);
+btnWinClose.addEventListener("click", hideWinOverlay);
+elWinOverlay.addEventListener("click", (e)=> {
+  if (e.target === elWinOverlay) hideWinOverlay();
+});
 
-// init
+// === init ===
 (async function init(){
   log("connecting…");
   status("connecting…");
@@ -342,15 +564,15 @@ btnMute.addEventListener("click", toggleMute);
 
   const saved = await loadGame(uid);
   if (saved){
-    state = { ...defaultState(), ...saved };
+    state = { ...defaultState(), ...saved, nickname: NICKNAME };
   } else {
     await persist();
   }
 
   renderGrid(state.lastGrid || genGrid());
-  renderHud();
+  renderHud(0);
+  clearLines();
 
   log("ready. spin when you want.");
   status("ready ✅");
 })();
-
