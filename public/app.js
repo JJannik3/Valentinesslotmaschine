@@ -45,7 +45,7 @@ function safePlay(a) {
 
 const NICKNAME = "Valentinsgift";
 
-// === milestones (hidden until unlocked) ===
+// === milestones ===
 const MILESTONES = [
   { lights: 2,  place: "gersberg bei leinburg" },
   { lights: 4,  place: "garmisch-partenkirchen" },
@@ -55,6 +55,8 @@ const MILESTONES = [
 ];
 
 // === symbols ===
+// ✅ LIGHT even rarer
+// ✅ Wilds in FS MUCH rarer
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
@@ -65,13 +67,13 @@ const SYM = {
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
   // ✅ even rarer now
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.05, wFS: 0.09 },
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.028, wFS: 0.05 },
 
-  // Wilds: FS slightly reduced
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 1.35, mult: 1 },
-  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.14, mult: 2 },
-  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.06, mult: 3 },
-  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.022, mult: 4 },
+  // ✅ FS wilds MUCH rarer
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 0.55,  mult: 1 },
+  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.05,  mult: 2 },
+  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.018, mult: 3 },
+  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.006, mult: 4 },
 };
 
 const BASE_SYMBOLS = [
@@ -86,7 +88,7 @@ const GRID_H = 5;
 let uid = null;
 let state = defaultState();
 
-let spinning = false; // ✅ spin lock
+let spinning = false;
 
 function defaultState() {
   return {
@@ -96,7 +98,7 @@ function defaultState() {
     lights: 0,
     unlocked: [],
     freeSpinsLeft: 0,
-    stickyWilds: [], // {x,y,k} persistent during FS
+    stickyWilds: [], // {x,y,k}
     lastGrid: null,
   };
 }
@@ -133,12 +135,12 @@ function wildMult(sym){
   return 1;
 }
 
-// ✅ stronger degressive
+// ✅ even stronger degressive than before
 // 0 lights => 1.0
-// 5 lights => ~0.107
-// 10 lights => ~0.011
+// 5 lights => ~0.059
+// 10 lights => ~0.0035
 function lightDegressiveFactor(){
-  return Math.pow(0.64, state.lights);
+  return Math.pow(0.57, state.lights);
 }
 
 function symbolWeights(isFS){
@@ -146,14 +148,13 @@ function symbolWeights(isFS){
 
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
-    // bet influence stays tiny
-    const betFactor = clamp(1 + ((state.bet - 10) / 800), 0.99, 1.08);
+    const betFactor = clamp(1 + ((state.bet - 10) / 900), 0.99, 1.06);
     w[lightIndex] *= betFactor * lightDegressiveFactor();
   }
   return w;
 }
 
-// apply sticky wilds into a grid (FS only)
+// apply sticky wilds into grid (FS only)
 function applyStickyWildsToGrid(grid){
   if (state.freeSpinsLeft <= 0) return;
   if (!state.stickyWilds.length) return;
@@ -364,12 +365,10 @@ function renderGrid(grid){
 
       cell.textContent = sym.emoji;
 
-      // wild
       cell.classList.toggle("wild", isAnyWild(sym));
       if (isAnyWild(sym) && wildMult(sym) > 1) cell.dataset.mult = `${wildMult(sym)}x`;
       else delete cell.dataset.mult;
 
-      // light glow baseline class
       cell.classList.toggle("light", sym.k === "LIGHT");
 
       cell.dataset.x = String(x);
@@ -445,7 +444,6 @@ function flashLightCells(){
   const cells = [...elGrid.querySelectorAll(".cell.light")];
   for (const c of cells){
     c.classList.remove("lightHit");
-    // restart animation
     void c.offsetWidth;
     c.classList.add("lightHit");
     setTimeout(()=>c.classList.remove("lightHit"), 520);
@@ -482,12 +480,11 @@ async function animateFill(grid){
     await wait(reelDelay);
   }
 
-  // after a fill finishes, if any lights exist, flash them
   if (grid.flat().some(s => s.k === "LIGHT")) flashLightCells();
 }
 
 async function spin(){
-  if (spinning) return; // ✅ lock
+  if (spinning) return;
   setSpinLocked(true);
 
   try {
