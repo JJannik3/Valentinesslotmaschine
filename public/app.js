@@ -45,6 +45,10 @@ function safePlay(a) {
 
 const NICKNAME = "Valentinsgift";
 
+// ✅ House edge (RTP < 100%): payouts get multiplied by this
+// 0.92 = spürbar aber nicht brutal
+const HOUSE_FACTOR = 0.92;
+
 // === milestones ===
 const MILESTONES = [
   { lights: 2,  place: "gersberg bei leinburg" },
@@ -55,8 +59,8 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// ✅ LIGHT even rarer
-// ✅ Wilds in FS MUCH rarer
+// ✅ LIGHT slightly higher again (but still rare + degressive)
+// ✅ FS wilds very rare stays as you wanted
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
@@ -66,10 +70,10 @@ const SYM = {
 
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
-  // ✅ even rarer now
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.028, wFS: 0.05 },
+  // ✅ slightly higher than before
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.040, wFS: 0.070 },
 
-  // ✅ FS wilds MUCH rarer
+  // FS wilds very rare
   WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 0.55,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.05,  mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.018, mult: 3 },
@@ -135,7 +139,7 @@ function wildMult(sym){
   return 1;
 }
 
-// ✅ even stronger degressive than before
+// ✅ degressive remains strong
 // 0 lights => 1.0
 // 5 lights => ~0.059
 // 10 lights => ~0.0035
@@ -154,7 +158,6 @@ function symbolWeights(isFS){
   return w;
 }
 
-// apply sticky wilds into grid (FS only)
 function applyStickyWildsToGrid(grid){
   if (state.freeSpinsLeft <= 0) return;
   if (!state.stickyWilds.length) return;
@@ -171,7 +174,6 @@ function genGrid() {
   const weights = symbolWeights(isFS);
 
   const grid = Array.from({length:GRID_H}, () => Array.from({length:GRID_W}, () => null));
-
   for (let y=0;y<GRID_H;y++){
     for (let x=0;x<GRID_W;x++){
       grid[y][x] = weightedPick(BASE_SYMBOLS, weights);
@@ -240,7 +242,9 @@ function evalClusters(grid, bet){
       if (cells.length >= CLUSTER_MIN){
         const sym = symbolByKey(key);
         const baseMult = payoutMultForSize(sym, cells.length);
-        const amount = Math.floor(bet * baseMult * maxWild);
+
+        // ✅ house edge applied here
+        const amount = Math.floor(bet * baseMult * maxWild * HOUSE_FACTOR);
 
         totalWin += amount;
         wins.push({ key, size: cells.length, amount, cells, maxWild });
@@ -290,6 +294,8 @@ function applyCascade(grid, winPosSet){
 }
 
 // === LIGHT mechanics ===
+// each LIGHT: +3*bet coins and +1 lamp (up to 10)
+// ✅ house edge also affects this payout
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
@@ -298,7 +304,9 @@ function awardLightsFromGrid(grid){
     }
   }
   if (found > 0){
-    state.coins += found * (3 * state.bet);
+    const payout = Math.floor(found * (3 * state.bet) * HOUSE_FACTOR);
+    state.coins += payout;
+
     const before = state.lights;
     state.lights = clamp(state.lights + found, 0, 10);
     if (state.lights > before) safePlay(audio.light);
@@ -328,7 +336,6 @@ function renderScatter(count){
   }
 }
 
-// sticky wild collection during FS
 function addStickyWildsFromGrid(grid){
   if (state.freeSpinsLeft <= 0) return;
 
@@ -450,7 +457,6 @@ function flashLightCells(){
   }
 }
 
-// === Slot-like bottom-to-top fill animation ===
 async function animateFill(grid){
   const cells = [...elGrid.querySelectorAll(".cell")];
   const getCellEl = (x,y)=> cells.find(c => c.dataset.x==String(x) && c.dataset.y==String(y));
@@ -583,7 +589,7 @@ async function spin(){
     const parts = [];
     if (totalWin > 0) parts.push(`win: ${totalWin}`);
     else parts.push("no win");
-    if (light0 > 0) parts.push(`💡 x${light0} paid ${light0 * (3 * state.bet)}`);
+    if (light0 > 0) parts.push(`💡 x${light0} paid (house edge)`);
     if (triggerFS) parts.push("→ FREE SPINS!");
     if (retriggeredThisSpin) parts.push("+10 retrigger!");
     log(parts.join(" · "));
