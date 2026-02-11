@@ -64,24 +64,27 @@ const MILESTONES = [
 // ✅ NIGHT bleibt wie zuvor
 // ✅ LIGHT nur in FS (dynamisch in symbolWeights)
 const SYM = {
-  HEART: { k:"HEART", emoji:"💕", wBase: 34.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 31.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 27.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
+  // weniger "zu klumpig" -> etwas runter
+  HEART: { k:"HEART", emoji:"💕", wBase: 27.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 24.5, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 21.5, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  PETAL: { k:"PETAL", emoji:"🌸", wBase: 9.5,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
+  // mehr Vielfalt -> mid/premium leicht rauf
+  PETAL: { k:"PETAL", emoji:"🌸", wBase: 11.5, wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 15.5, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 14.5, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 14.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
-  STAR:  { k:"STAR",  emoji:"✨", wBase: 13.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
-
+  // gleich lassen
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
-
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 4.2,  wFS: 0.45,  mult: 1 },
+  // Wilds minimal runter (sonst zu viele Verbindungen => zu viele Wins)
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 3.4,  wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
 };
+
 
 const BASE_SYMBOLS = [
   SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR,
