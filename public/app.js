@@ -75,7 +75,7 @@ const SYM = {
   STAR:  { k:"STAR",  emoji:"✨", wBase: 14.5, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
   // gleich lassen
-  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
+  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 6.6, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
   // Wilds minimal runter (sonst zu viele Verbindungen => zu viele Wins)
