@@ -58,29 +58,26 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// ✅ Base-Game: mehr gleiche Symbole + öfter Wilds => mehr Symbolgewinne insgesamt
-// ✅ PETAL ist premium
-// ✅ NIGHT minimal erhöht (wie zuvor)
-// ✅ LIGHT nur in FS (Gewicht dynamisch in symbolWeights)
+// ✅ A) Base: öfter Wilds
+// ✅ B) Base: öfter gleiche Symbole (mehr Cluster)
+// ✅ PETAL bleibt premium
+// ✅ NIGHT bleibt wie zuvor
+// ✅ LIGHT nur in FS (dynamisch in symbolWeights)
 const SYM = {
-  HEART: { k:"HEART", emoji:"💕", wBase: 28.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 26.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 23.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
+  HEART: { k:"HEART", emoji:"💕", wBase: 34.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 31.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 27.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  // premium
   PETAL: { k:"PETAL", emoji:"🌸", wBase: 9.5,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
 
   ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 14.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
   STAR:  { k:"STAR",  emoji:"✨", wBase: 13.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  // FS trigger leicht besser
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
 
-  // LIGHT kommt NUR in FS (dynamisch, siehe symbolWeights)
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  // Base: öfter Wilds (macht mehr Wins & verbindet Cluster)
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 3.0,  wFS: 0.45,  mult: 1 },
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 4.2,  wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
@@ -99,7 +96,7 @@ let uid = null;
 let state = defaultState();
 let spinning = false;
 
-// ✅ FS: damit LIGHT in einem Spin nur einmal zählen kann (auch über Cascades hinweg)
+// ✅ FS: LIGHT darf pro Spin nur 1× zählen (auch über Cascades hinweg)
 let fsLightAwardedThisSpin = false;
 
 function defaultState() {
@@ -205,10 +202,13 @@ function genGrid() {
   return grid;
 }
 
-// === CLUSTER WINS (>=5) ===
+// === CLUSTER WINS ===
+// ✅ C) Base: Cluster-Minimum 4 (deutlich mehr Hits)
+// ✅ FS: bleibt 5 (damit Freispiele special bleiben)
 const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR, SYM.NIGHT];
 const PAYABLE_KEYS = new Set(PAYABLE.map(s => s.k));
-const CLUSTER_MIN = 5;
+const CLUSTER_MIN_BASE = 4;
+const CLUSTER_MIN_FS = 5;
 
 function symbolByKey(k){ return PAYABLE.find(s=>s.k===k); }
 
@@ -219,6 +219,9 @@ function payoutMultForSize(sym, size){
 }
 
 function evalClusters(grid, bet){
+  const isFS = state.freeSpinsLeft > 0;
+  const CLUSTER_MIN = isFS ? CLUSTER_MIN_FS : CLUSTER_MIN_BASE;
+
   const visited = Array.from({length:GRID_H}, () => Array(GRID_W).fill(false));
   const wins = [];
   let totalWin = 0;
@@ -315,7 +318,6 @@ function applyCascade(grid, winPosSet){
 // === LIGHT mechanics ===
 // ✅ FS: LIGHT darf pro Spin nur 1× zählen (auch wenn Cascades weiterlaufen)
 function awardLightsFromGrid(grid){
-  // wenn wir im FS sind und in diesem Spin schon ein Light gezählt wurde -> nie wieder
   if (state.freeSpinsLeft > 0 && fsLightAwardedThisSpin) return 0;
 
   let found = 0;
@@ -325,11 +327,9 @@ function awardLightsFromGrid(grid){
     }
   }
 
-  // ✅ In FS: egal wie viele Lichter im Grid, max 1 zählt
   if (state.freeSpinsLeft > 0 && found > 1) found = 1;
 
   if (found > 0){
-    // merken: in FS ist dieses Spin-Light jetzt "verbraucht"
     if (state.freeSpinsLeft > 0) fsLightAwardedThisSpin = true;
 
     const payout = Math.floor(found * (3 * state.bet) * HOUSE_FACTOR);
