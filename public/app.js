@@ -146,8 +146,15 @@ function wildMult(sym){
 
 // base degression stays the same
 function lightDegressiveFactorBase(){
-  return Math.pow(0.57, state.lights);
+  // Starke Degression bis 9 Lights bleibt gleich
+  if (state.lights < 10) {
+    return Math.pow(0.57, state.lights);
+  }
+
+  // Bei 10 Lights nochmal massiv runter, sodass ≈ 1 Licht / 10.000 Spins entsteht
+  return 0.00045; 
 }
+
 
 // ✅ last 2 stages easier: when you already have 8 or 9 lights
 // lights=8 -> boost 2.2x
