@@ -64,29 +64,32 @@ const MILESTONES = [
 // ✅ PETAL becomes a premium symbol (rarer, higher payouts)
 // ✅ FS trigger chance slightly higher
 const SYM = {
-  // ✅ base game more wins: slightly increase common symbol frequency
-  HEART: { k:"HEART", emoji:"💕", wBase: 22.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 20.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 18.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
+  // ✅ Base: deutlich mehr gleiche Symbole (mehr Cluster-Wins)
+  HEART: { k:"HEART", emoji:"💕", wBase: 28.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 26.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 23.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  // ✅ PETAL premium
-  PETAL: { k:"PETAL", emoji:"🌸", wBase: 8.0,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
+  // ✅ Premium-Blume bleibt premium, aber im Base sichtbar genug für Hits
+  PETAL: { k:"PETAL", emoji:"🌸", wBase: 9.5,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
 
-  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 11.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
-  STAR:  { k:"STAR",  emoji:"✨", wBase: 10.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
+  // ✅ Mid-Tier etwas hoch, damit das Grid “runder” gewinnt
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 14.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 13.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  // ✅ FS trigger slightly more likely
+  // ✅ FS Trigger minimal besser bleibt wie zuvor
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
 
-  // ✅ LIGHT: base disabled; FS handled dynamically in symbolWeights()
+  // ✅ LIGHT: base disabled; FS comes from symbolWeights()
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  // ✅ base game: more wild presence
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 2.20, wFS: 0.45,  mult: 1 },
+  // ✅ Base: häufiger Wilds (macht mehr Wins + bessere Multis), aber nicht “zu dominant”
+  //    (zu hohe Wild-Quote kann echte Cluster reduzieren – dieser Wert ist ein guter Sweetspot)
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 3.0,  wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
 };
+
 
 const BASE_SYMBOLS = [
   SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR,
