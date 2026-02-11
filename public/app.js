@@ -58,38 +58,33 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// Changes kept:
-// ✅ LIGHT only in Free Spins (base game = 0 weight)
-// ✅ Base game: more wins + more wild presence (and slightly easier clusters via weights)
-// ✅ PETAL becomes a premium symbol (rarer, higher payouts)
-// ✅ FS trigger chance slightly higher
+// ✅ Base-Game: mehr gleiche Symbole + öfter Wilds => mehr Symbolgewinne insgesamt
+// ✅ PETAL ist premium
+// ✅ NIGHT minimal erhöht (wie zuvor)
+// ✅ LIGHT nur in FS (Gewicht dynamisch in symbolWeights)
 const SYM = {
-  // ✅ Base: deutlich mehr gleiche Symbole (mehr Cluster-Wins)
   HEART: { k:"HEART", emoji:"💕", wBase: 28.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 26.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
   MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 23.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  // ✅ Premium-Blume bleibt premium, aber im Base sichtbar genug für Hits
+  // premium
   PETAL: { k:"PETAL", emoji:"🌸", wBase: 9.5,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
 
-  // ✅ Mid-Tier etwas hoch, damit das Grid “runder” gewinnt
   ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 14.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
   STAR:  { k:"STAR",  emoji:"✨", wBase: 13.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  // ✅ FS Trigger minimal besser bleibt wie zuvor
+  // FS trigger leicht besser
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
 
-  // ✅ LIGHT: base disabled; FS comes from symbolWeights()
+  // LIGHT kommt NUR in FS (dynamisch, siehe symbolWeights)
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  // ✅ Base: häufiger Wilds (macht mehr Wins + bessere Multis), aber nicht “zu dominant”
-  //    (zu hohe Wild-Quote kann echte Cluster reduzieren – dieser Wert ist ein guter Sweetspot)
+  // Base: öfter Wilds (macht mehr Wins & verbindet Cluster)
   WILD:  { k:"WILD",  emoji:"🔮", wBase: 3.0,  wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
 };
-
 
 const BASE_SYMBOLS = [
   SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR,
@@ -103,6 +98,9 @@ const GRID_H = 5;
 let uid = null;
 let state = defaultState();
 let spinning = false;
+
+// ✅ FS: damit LIGHT in einem Spin nur einmal zählen kann (auch über Cascades hinweg)
+let fsLightAwardedThisSpin = false;
 
 function defaultState() {
   return {
@@ -151,9 +149,8 @@ function wildMult(sym){
 
 /**
  * ✅ LIGHT only in Free Spins
- * - In base game: weight = 0
- * - In FS: starts "good" but becomes harder the more lights you already have
- *   and NEVER becomes impossible (minimum factor)
+ * - base: weight = 0
+ * - FS: gute Grundchance, degressiv je mehr Lights du schon hast, aber nie unmöglich
  */
 function symbolWeights(isFS){
   const w = BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
@@ -161,13 +158,13 @@ function symbolWeights(isFS){
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
 
-    // ✅ base game: no lights at all
+    // ✅ base: no lights
     if (!isFS){
       w[lightIndex] = 0;
       return w;
     }
 
-    // ✅ FS: "good" base chance, degressive with current light count, but not impossible
+    // ✅ FS dynamic light chance
     const FS_LIGHT_BASE = 0.55;
     const degressive = Math.pow(0.80, state.lights);
     const MIN_FACTOR = 0.12;
@@ -316,10 +313,11 @@ function applyCascade(grid, winPosSet){
 }
 
 // === LIGHT mechanics ===
-// ✅ Change requested: In Free Spins, if LIGHTs touch/are in wild clusters,
-// they should NOT be counted multiple times in the same spin.
-// => We'll cap the LIGHT count per spin to max 1 (still pays +1 light total).
+// ✅ FS: LIGHT darf pro Spin nur 1× zählen (auch wenn Cascades weiterlaufen)
 function awardLightsFromGrid(grid){
+  // wenn wir im FS sind und in diesem Spin schon ein Light gezählt wurde -> nie wieder
+  if (state.freeSpinsLeft > 0 && fsLightAwardedThisSpin) return 0;
+
   let found = 0;
   for (let y=0;y<GRID_H;y++){
     for (let x=0;x<GRID_W;x++){
@@ -327,10 +325,13 @@ function awardLightsFromGrid(grid){
     }
   }
 
-  // ✅ Only in Free Spins: cap to 1 per spin
+  // ✅ In FS: egal wie viele Lichter im Grid, max 1 zählt
   if (state.freeSpinsLeft > 0 && found > 1) found = 1;
 
   if (found > 0){
+    // merken: in FS ist dieses Spin-Light jetzt "verbraucht"
+    if (state.freeSpinsLeft > 0) fsLightAwardedThisSpin = true;
+
     const payout = Math.floor(found * (3 * state.bet) * HOUSE_FACTOR);
     state.coins += payout;
 
@@ -520,6 +521,9 @@ async function spin(){
   if (spinning) return;
   setSpinLocked(true);
 
+  // ✅ reset: in FS darf LIGHT pro Spin wieder einmal zählen
+  fsLightAwardedThisSpin = false;
+
   try {
     if (!muted && audio.bg.paused) { try { await audio.bg.play(); } catch {} }
 
@@ -587,6 +591,7 @@ async function spin(){
 
       if (state.freeSpinsLeft > 0) addStickyWildsFromGrid(grid);
 
+      // ✅ in FS wird LIGHT pro Spin nur 1x gezählt (awardLightsFromGrid blockt danach)
       awardLightsFromGrid(grid);
 
       nCount = nightCount(grid);
