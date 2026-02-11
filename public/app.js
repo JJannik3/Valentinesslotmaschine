@@ -46,7 +46,6 @@ function safePlay(a) {
 const NICKNAME = "Valentinsgift";
 
 // ✅ House edge (RTP < 100%): payouts get multiplied by this
-// 0.92 = spürbar aber nicht brutal
 const HOUSE_FACTOR = 0.92;
 
 // === milestones ===
@@ -59,29 +58,36 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// ✅ LIGHT slightly higher again (but still rare + degressive)
-// ✅ FS wilds very rare stays as you wanted
+// ✅ new low-tier symbol: PETAL 🌸 (not premium)
+// ✅ light weights remain basically same; boost only when you already have 8/9 lights
+// ✅ NIGHT in FS slightly less likely
+// ✅ Wilds in FS slightly less likely
 const SYM = {
   HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
   MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
   MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16,  wFS: 16,  payout3: 0.6, payout4: 1.4, payout5: 3.0 },
+
+  // ✅ new "non-premium"
+  PETAL: { k:"PETAL", emoji:"🌸", wBase: 14,  wFS: 14,  payout3: 0.30, payout4: 0.80, payout5: 1.60 },
+
   ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10,  wFS: 10,  payout3: 0.9, payout4: 2.0, payout5: 4.0 },
   STAR:  { k:"STAR",  emoji:"✨", wBase: 9,   wFS: 9,   payout3: 1.0, payout4: 2.2, payout5: 4.4 },
 
-  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.70, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
+  // ✅ FS minimal less likely
+  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.55, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
 
-  // ✅ slightly higher than before
+  // (keep "overall" light odds, only last 2 stages boosted)
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.040, wFS: 0.070 },
 
-  // FS wilds very rare
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 0.55,  mult: 1 },
-  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.05,  mult: 2 },
-  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.018, mult: 3 },
-  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.006, mult: 4 },
+  // ✅ FS wilds slightly less likely
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 0.45,  mult: 1 },
+  WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
+  WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
+  WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
 };
 
 const BASE_SYMBOLS = [
-  SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR,
+  SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR,
   SYM.NIGHT, SYM.LIGHT,
   SYM.WILD, SYM.WILD2, SYM.WILD3, SYM.WILD4
 ];
@@ -91,7 +97,6 @@ const GRID_H = 5;
 
 let uid = null;
 let state = defaultState();
-
 let spinning = false;
 
 function defaultState() {
@@ -139,12 +144,18 @@ function wildMult(sym){
   return 1;
 }
 
-// ✅ degressive remains strong
-// 0 lights => 1.0
-// 5 lights => ~0.059
-// 10 lights => ~0.0035
-function lightDegressiveFactor(){
+// base degression stays the same
+function lightDegressiveFactorBase(){
   return Math.pow(0.57, state.lights);
+}
+
+// ✅ last 2 stages easier: when you already have 8 or 9 lights
+// lights=8 -> boost 2.2x
+// lights=9 -> boost 4.0x
+function lightLateStageBoost(){
+  if (state.lights === 8) return 2.2;
+  if (state.lights === 9) return 4.0;
+  return 1.0;
 }
 
 function symbolWeights(isFS){
@@ -153,7 +164,7 @@ function symbolWeights(isFS){
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
     const betFactor = clamp(1 + ((state.bet - 10) / 900), 0.99, 1.06);
-    w[lightIndex] *= betFactor * lightDegressiveFactor();
+    w[lightIndex] *= betFactor * lightDegressiveFactorBase() * lightLateStageBoost();
   }
   return w;
 }
@@ -185,7 +196,7 @@ function genGrid() {
 }
 
 // === CLUSTER WINS (>=5) ===
-const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.ROSE, SYM.STAR, SYM.NIGHT];
+const PAYABLE = [SYM.HEART, SYM.MOON, SYM.MOTH, SYM.PETAL, SYM.ROSE, SYM.STAR, SYM.NIGHT];
 const PAYABLE_KEYS = new Set(PAYABLE.map(s => s.k));
 const CLUSTER_MIN = 5;
 
@@ -242,8 +253,6 @@ function evalClusters(grid, bet){
       if (cells.length >= CLUSTER_MIN){
         const sym = symbolByKey(key);
         const baseMult = payoutMultForSize(sym, cells.length);
-
-        // ✅ house edge applied here
         const amount = Math.floor(bet * baseMult * maxWild * HOUSE_FACTOR);
 
         totalWin += amount;
@@ -294,8 +303,6 @@ function applyCascade(grid, winPosSet){
 }
 
 // === LIGHT mechanics ===
-// each LIGHT: +3*bet coins and +1 lamp (up to 10)
-// ✅ house edge also affects this payout
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
