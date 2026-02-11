@@ -58,29 +58,31 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// ✅ new low-tier symbol: PETAL 🌸 (not premium)
-// ✅ light weights remain basically same; boost only when you already have 8/9 lights
-// ✅ NIGHT in FS slightly less likely
-// ✅ Wilds in FS slightly less likely
+// Changes requested:
+// ✅ LIGHT only in Free Spins (base game = 0 weight)
+// ✅ Base game: more wins + more wild presence
+// ✅ PETAL becomes a premium symbol (rarer, higher payouts)
+// ✅ FS trigger chance slightly higher
 const SYM = {
-  HEART: { k:"HEART", emoji:"💕", wBase: 20,  wFS: 20,  payout3: 0.5, payout4: 1.2, payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18,  wFS: 18,  payout3: 0.45,payout4: 1.1, payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16,  wFS: 16,  payout3: 0.6, payout4: 1.4, payout5: 3.0 },
+  HEART: { k:"HEART", emoji:"💕", wBase: 20,   wFS: 20,   payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18.5, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16.5, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  // ✅ new "non-premium"
-  PETAL: { k:"PETAL", emoji:"🌸", wBase: 14,  wFS: 14,  payout3: 0.30, payout4: 0.80, payout5: 1.60 },
+  // ✅ PETAL is premium now: rarer + better payouts
+  PETAL: { k:"PETAL", emoji:"🌸", wBase: 8.0,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
 
-  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10,  wFS: 10,  payout3: 0.9, payout4: 2.0, payout5: 4.0 },
-  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,   wFS: 9,   payout3: 1.0, payout4: 2.2, payout5: 4.4 },
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10,   wFS: 10,   payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,    wFS: 9,    payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  // ✅ FS minimal less likely
-  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.25, wFS: 3.55, payout3: 0.7, payout4: 1.6, payout5: 3.2 },
+  // ✅ FS trigger slightly more likely (base + FS a bit up)
+  NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
 
-  // (keep "overall" light odds, only last 2 stages boosted)
-  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.040, wFS: 0.070 },
+  // ✅ LIGHT: base game disabled; FS handled dynamically in symbolWeights()
+  LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  // ✅ FS wilds slightly less likely
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.2,  wFS: 0.45,  mult: 1 },
+  // ✅ Base game: more wins with wilds -> slightly higher base wild weight
+  // ✅ FS wilds kept slightly rarer (as before-ish)
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.80, wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
@@ -144,35 +146,37 @@ function wildMult(sym){
   return 1;
 }
 
-// base degression stays the same
-function lightDegressiveFactorBase(){
-  // Starke Degression bis 9 Lights bleibt gleich
-  if (state.lights < 10) {
-    return Math.pow(0.57, state.lights);
-  }
-
-  // Bei 10 Lights nochmal massiv runter, sodass ≈ 1 Licht / 10.000 Spins entsteht
-  return 0.00045; 
-}
-
-
-// ✅ last 2 stages easier: when you already have 8 or 9 lights
-// lights=8 -> boost 2.2x
-// lights=9 -> boost 4.0x
-function lightLateStageBoost(){
-  if (state.lights === 8) return 2.2;
-  if (state.lights === 9) return 4.0;
-  return 1.0;
-}
-
+/**
+ * ✅ LIGHT only in Free Spins
+ * - In base game: weight = 0
+ * - In FS: starts "good" but becomes harder the more lights you already have
+ *   and NEVER becomes impossible (minimum factor)
+ */
 function symbolWeights(isFS){
   const w = BASE_SYMBOLS.map(s => isFS ? s.wFS : s.wBase);
 
   const lightIndex = BASE_SYMBOLS.findIndex(s => s.k === "LIGHT");
   if (lightIndex !== -1){
+
+    // ✅ base game: no lights at all
+    if (!isFS){
+      w[lightIndex] = 0;
+      return w;
+    }
+
+    // ✅ FS: "good" base chance, degressive with current light count, but not impossible
+    const FS_LIGHT_BASE = 0.55;          // strong enough to feel it early in FS
+    const degressive = Math.pow(0.80, state.lights);
+    const MIN_FACTOR = 0.12;             // still possible even at 9/10
+
+    const factor = Math.max(degressive, MIN_FACTOR);
+
+    // small bet influence (like you had)
     const betFactor = clamp(1 + ((state.bet - 10) / 900), 0.99, 1.06);
-    w[lightIndex] *= betFactor * lightDegressiveFactorBase() * lightLateStageBoost();
+
+    w[lightIndex] = FS_LIGHT_BASE * factor * betFactor;
   }
+
   return w;
 }
 
