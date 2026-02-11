@@ -58,31 +58,31 @@ const MILESTONES = [
 ];
 
 // === symbols ===
-// Changes requested:
+// Changes kept:
 // ✅ LIGHT only in Free Spins (base game = 0 weight)
-// ✅ Base game: more wins + more wild presence
+// ✅ Base game: more wins + more wild presence (and slightly easier clusters via weights)
 // ✅ PETAL becomes a premium symbol (rarer, higher payouts)
 // ✅ FS trigger chance slightly higher
 const SYM = {
-  HEART: { k:"HEART", emoji:"💕", wBase: 20,   wFS: 20,   payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
-  MOON:  { k:"MOON",  emoji:"🌙", wBase: 18.5, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
-  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 16.5, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
+  // ✅ base game more wins: slightly increase common symbol frequency
+  HEART: { k:"HEART", emoji:"💕", wBase: 22.0, wFS: 20.0, payout3: 0.5,  payout4: 1.2,  payout5: 2.6 },
+  MOON:  { k:"MOON",  emoji:"🌙", wBase: 20.0, wFS: 18.5, payout3: 0.45, payout4: 1.1,  payout5: 2.4 },
+  MOTH:  { k:"MOTH",  emoji:"🦋", wBase: 18.0, wFS: 16.0, payout3: 0.6,  payout4: 1.4,  payout5: 3.0 },
 
-  // ✅ PETAL is premium now: rarer + better payouts
+  // ✅ PETAL premium
   PETAL: { k:"PETAL", emoji:"🌸", wBase: 8.0,  wFS: 8.0,  payout3: 0.95, payout4: 2.1,  payout5: 4.2 },
 
-  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 10,   wFS: 10,   payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
-  STAR:  { k:"STAR",  emoji:"✨", wBase: 9,    wFS: 9,    payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
+  ROSE:  { k:"ROSE",  emoji:"🌹", wBase: 11.0, wFS: 10.0, payout3: 0.9,  payout4: 2.0,  payout5: 4.0 },
+  STAR:  { k:"STAR",  emoji:"✨", wBase: 10.0, wFS: 9.0,  payout3: 1.0,  payout4: 2.2,  payout5: 4.4 },
 
-  // ✅ FS trigger slightly more likely (base + FS a bit up)
+  // ✅ FS trigger slightly more likely
   NIGHT: { k:"NIGHT", emoji:"🌑", wBase: 3.60, wFS: 3.80, payout3: 0.7,  payout4: 1.6,  payout5: 3.2 },
 
-  // ✅ LIGHT: base game disabled; FS handled dynamically in symbolWeights()
+  // ✅ LIGHT: base disabled; FS handled dynamically in symbolWeights()
   LIGHT: { k:"LIGHT", emoji:"💡", wBase: 0.0,  wFS: 0.0 },
 
-  // ✅ Base game: more wins with wilds -> slightly higher base wild weight
-  // ✅ FS wilds kept slightly rarer (as before-ish)
-  WILD:  { k:"WILD",  emoji:"🔮", wBase: 1.80, wFS: 0.45,  mult: 1 },
+  // ✅ base game: more wild presence
+  WILD:  { k:"WILD",  emoji:"🔮", wBase: 2.20, wFS: 0.45,  mult: 1 },
   WILD2: { k:"WILD2", emoji:"🔮", wBase: 0.0,  wFS: 0.038, mult: 2 },
   WILD3: { k:"WILD3", emoji:"🔮", wBase: 0.0,  wFS: 0.014, mult: 3 },
   WILD4: { k:"WILD4", emoji:"🔮", wBase: 0.0,  wFS: 0.0045, mult: 4 },
@@ -165,13 +165,12 @@ function symbolWeights(isFS){
     }
 
     // ✅ FS: "good" base chance, degressive with current light count, but not impossible
-    const FS_LIGHT_BASE = 0.55;          // strong enough to feel it early in FS
+    const FS_LIGHT_BASE = 0.55;
     const degressive = Math.pow(0.80, state.lights);
-    const MIN_FACTOR = 0.12;             // still possible even at 9/10
+    const MIN_FACTOR = 0.12;
 
     const factor = Math.max(degressive, MIN_FACTOR);
 
-    // small bet influence (like you had)
     const betFactor = clamp(1 + ((state.bet - 10) / 900), 0.99, 1.06);
 
     w[lightIndex] = FS_LIGHT_BASE * factor * betFactor;
@@ -314,6 +313,9 @@ function applyCascade(grid, winPosSet){
 }
 
 // === LIGHT mechanics ===
+// ✅ Change requested: In Free Spins, if LIGHTs touch/are in wild clusters,
+// they should NOT be counted multiple times in the same spin.
+// => We'll cap the LIGHT count per spin to max 1 (still pays +1 light total).
 function awardLightsFromGrid(grid){
   let found = 0;
   for (let y=0;y<GRID_H;y++){
@@ -321,6 +323,10 @@ function awardLightsFromGrid(grid){
       if (grid[y][x].k === "LIGHT") found++;
     }
   }
+
+  // ✅ Only in Free Spins: cap to 1 per spin
+  if (state.freeSpinsLeft > 0 && found > 1) found = 1;
+
   if (found > 0){
     const payout = Math.floor(found * (3 * state.bet) * HOUSE_FACTOR);
     state.coins += payout;
